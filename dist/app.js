@@ -2,9 +2,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.m
 
 const $ = (id) => document.getElementById(id);
 const API_DEFAULT = new URLSearchParams(location.search).get('api') || sessionStorage.getItem('overtiq-endpoint') || 'https://computing-forestry-extraordinary-collapse.trycloudflare.com';
+const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const state = {
   apiBase: API_DEFAULT.replace(/\/$/, ''),
-  apiKey: sessionStorage.getItem('overtiq-key') || '',
+  apiKey: sessionStorage.getItem('overtiq-key') || API_KEY_DEFAULT,
   frames: [],
   zones: [],
   assessment: null,
