@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else None
 API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
-SERVICE_VERSION = "overtiq-gpu-0.1.0"
+SERVICE_VERSION = "overtiq-gpu-0.2.0"
 
 
 def require_gpu() -> torch.device:
@@ -62,6 +62,9 @@ class SimulationRequest(BaseModel):
     fuel_kg: float = 42.0
     ers_fraction: float = Field(default=0.62, ge=0, le=1)
     weather: str = "DRY"
+    rain_intensity: float = Field(default=0.0, ge=0, le=1)
+    vsc: bool = False
+    red_flag: bool = False
     safety_car: bool = False
     target_driver: str | None = None
 
@@ -155,6 +158,32 @@ class GPUForecaster:
 FORECASTER = GPUForecaster()
 
 
+def _conditions(req: SimulationRequest) -> dict[str, float | str]:
+    """Resolve weather and tyre grip once on the request boundary.
+
+    The scalar coefficients are intentionally explicit so a race engineer can
+    see why a scenario moved. They are consumed by CUDA tensors in the loop.
+    """
+    weather = str(req.weather or "DRY").upper()
+    rain = float(req.rain_intensity)
+    if weather == "INTERMEDIATE":
+        water = max(rain, 0.38)
+    elif weather == "WET":
+        water = max(rain, 0.82)
+    else:
+        water = rain
+    compound = str(req.tire_compound or "MEDIUM").upper()
+    preferred = {"SOFT": 0.0, "MEDIUM": 0.04, "HARD": 0.08, "INTERMEDIATE": 0.48, "WET": 0.82}.get(compound, 0.04)
+    mismatch = abs(water - preferred)
+    # Slicks aquaplane in water; rain tyres lose some performance on a dry line.
+    grip = max(0.34, 1.0 - mismatch * (1.35 if water > 0.18 else 0.72))
+    if compound in {"INTERMEDIATE", "WET"} and water < 0.18:
+        grip *= 0.82
+    if compound == "WET" and water < 0.55:
+        grip *= 0.88
+    return {"weather": weather, "rain": water, "grip": max(0.25, min(1.0, grip))}
+
+
 def _track(s: torch.Tensor, length: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Reference-inspired closed circuit centerline, entirely on the GPU."""
     u = (s / length) * (2.0 * math.pi)
@@ -180,6 +209,7 @@ def _now() -> str:
 def _frame(t: float, s: torch.Tensor, v: torch.Tensor, gap: torch.Tensor, battery: torch.Tensor, fuel: torch.Tensor,
            req: SimulationRequest, index: int) -> dict[str, Any]:
     # One frame is serialized after the GPU has finished its vectorized update.
+    conditions = _conditions(req)
     s0 = float(s.item()); v0 = float(v.item()); g0 = float(gap.item())
     track_s = torch.linspace(s0, s0 + 0.01, 2, device=DEVICE)
     x, y, heading, curv = _track(track_s, req.track_length_m)
@@ -201,11 +231,11 @@ def _frame(t: float, s: torch.Tensor, v: torch.Tensor, gap: torch.Tensor, batter
                      "brake": round(float(max(0.0, curv[0].item() * 18.0 - 0.04)), 4), "gear": int(max(3, min(8, round(speed_kmh / 42)))), "drs": bool(zone_type == "Overtake" and g0 < 1.0)},
         "wheels": {"fl": {"slip_ratio": round(abs(steer) * 0.04, 4), "load_n": 1820.0}, "fr": {"slip_ratio": round(abs(steer) * 0.04, 4), "load_n": 1800.0},
                    "rl": {"slip_ratio": 0.012, "load_n": 1700.0}, "rr": {"slip_ratio": 0.012, "load_n": 1690.0}},
-        "tires": {"compound": req.tire_compound, "age_laps": round(req.tire_age_laps + t / 92.0, 2), "surface_temp_c": round(89.0 + abs(steer) * 8.0, 2), "wear": round(min(1.0, 0.34 + t / 700.0), 4)},
+        "tires": {"compound": req.tire_compound, "age_laps": round(req.tire_age_laps + t / 92.0, 2), "surface_temp_c": round(89.0 + abs(steer) * 8.0, 2), "wear": round(min(1.0, 0.34 + t / 700.0), 4), "grip_factor": round(float(conditions["grip"]), 3), "rain_intensity": round(float(conditions["rain"]), 3)},
         "forces": {"aero_downforce_n": round(2600.0 + v0 * v0 * 0.08, 2), "drag_n": round(v0 * v0 * 0.55, 2), "longitudinal_n": round((v0 - req.speed_mps) * 190.0, 2)},
         "energy": {"ers_fraction": round(float(battery.item()), 4), "fuel_kg": round(float(fuel.item()), 3), "fuel_lap_delta_kg": -1.72},
-        "flags": {"safety_car": req.safety_car, "vsc": req.safety_car, "track_limits_warning": bool(abs(steer) > 0.8), "data_quality": "simulated_gpu"},
-        "race": {"driver_number": req.driver_number, "driver_code": req.driver_code, "lap": lap, "position": req.position, "gap_ahead_s": round(g0, 4), "decision": req.decision},
+        "flags": {"safety_car": req.safety_car, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag, "track_limits_warning": bool(abs(steer) > 0.8), "data_quality": "simulated_gpu"},
+        "race": {"driver_number": req.driver_number, "driver_code": req.driver_code, "lap": lap, "position": req.position, "gap_ahead_s": round(g0, 4), "decision": req.decision, "weather": conditions["weather"], "rain_intensity": round(float(conditions["rain"]), 3)},
     }
 
 
@@ -213,6 +243,9 @@ def _frame(t: float, s: torch.Tensor, v: torch.Tensor, gap: torch.Tensor, batter
 def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     device = require_gpu()
     torch.manual_seed(req.seed)
+    conditions = _conditions(req)
+    grip = float(conditions["grip"])
+    rain = float(conditions["rain"])
     dt = float(req.dt)
     # The state update and all scenario branches remain on CUDA.
     n = 1 if include_frames else min(req.n_scenarios, 1024)
@@ -233,6 +266,12 @@ def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[l
     durable = torch.zeros((n,), dtype=torch.bool, device=device)
     frames: list[dict[str, Any]] = []
     action_bias = {"ATTACK": 0.34, "DEFEND": -0.16, "CONSERVE": -0.32, "RECOVER": -0.48}[req.decision]
+    # Fuel mass and ERS deployment are scenario inputs, so they alter the
+    # vehicle state instead of being display-only controls.
+    mass_factor = max(0.82, min(1.0, 1.0 - (float(req.fuel_kg) - 42.0) * 0.002))
+    pace_factor = max(0.58, min(1.0, 0.78 + 0.22 * grip))
+    speed_cap = 94.0 * pace_factor
+    opp_speed_cap = 92.0 * pace_factor
     start = torch.cuda.Event(enable_timing=True); end = torch.cuda.Event(enable_timing=True)
     start.record()
     for i in range(steps):
@@ -240,20 +279,30 @@ def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[l
         phase = (s / req.track_length_m) * (2.0 * math.pi)
         curvature = 0.0006 + 0.0042 * torch.sin(2.0 * phase + 0.5).abs() + 0.0024 * torch.sin(5.0 * phase).abs()
         noise = torch.randn((n,), device=device) * 0.065
-        throttle = torch.clamp(0.84 + action_bias - curvature * 17.0 + noise * 0.1, 0.2, 1.0)
+        throttle = torch.clamp((0.84 + action_bias - curvature * 17.0 + noise * 0.1) * (0.78 + 0.22 * grip), 0.08, 1.0)
         brake = torch.clamp(curvature * 15.0 - 0.02, 0.0, 0.9)
         drag = 0.0019 * speed * speed
-        accel = 4.0 * throttle - 7.8 * brake - drag + noise
-        if req.safety_car:
+        accel = (4.0 * throttle - 7.8 * brake - drag + noise) * mass_factor + 0.75 * battery
+        if req.vsc or req.safety_car:
             accel = torch.minimum(accel, torch.full_like(accel, 0.75))
-        speed = torch.clamp(speed + accel * loop_dt, 34.0, 94.0)
-        opp_speed = torch.clamp(opp_speed + (3.55 - 0.0019 * opp_speed * opp_speed) * loop_dt, 34.0, 92.0)
+        if req.red_flag:
+            # A red flag freezes racing and brings both cars to pit-lane pace.
+            accel = -speed * 0.75
+        speed = torch.clamp(speed + accel * loop_dt, 0.0 if req.red_flag else 34.0, min(speed_cap, 55.0) if (req.vsc or req.safety_car) else speed_cap)
+        opp_accel = (3.55 - 0.0019 * opp_speed * opp_speed) * mass_factor
+        if req.red_flag:
+            opp_accel = -opp_speed * 0.75
+        opp_speed = torch.clamp(opp_speed + opp_accel * loop_dt, 0.0 if req.red_flag else 34.0, min(opp_speed_cap, 53.0) if (req.vsc or req.safety_car) else opp_speed_cap)
         closing = (speed - opp_speed) * loop_dt * 0.065
         gap = torch.clamp(gap - closing - action_bias * loop_dt * 0.012 + torch.randn((n,), device=device) * 0.004, 0.04, 12.0)
         s = s + speed * loop_dt
         battery = torch.clamp(battery - (0.0005 + throttle * 0.0007) * loop_dt + (brake * 0.0004) * loop_dt, 0.05, 1.0)
-        fuel = torch.clamp(fuel - (0.00037 * speed + throttle * 0.012) * loop_dt, 0.0, 110.0)
-        p_pass = torch.sigmoid(2.2 - 1.45 * gap + 0.022 * (speed - opp_speed) + action_bias * 2.4 - curvature * 85.0) * (loop_dt / 60.0)
+        fuel = torch.clamp(fuel - (0.00037 * speed + throttle * 0.012) * loop_dt * (0.12 if req.red_flag else 1.0), 0.0, 110.0)
+        p_pass = torch.sigmoid(2.2 - 1.45 * gap + 0.022 * (speed - opp_speed) + action_bias * 2.4 - curvature * 85.0) * (loop_dt / 60.0) * grip * (1.0 - rain * 0.35)
+        if req.vsc or req.safety_car:
+            p_pass = p_pass * 0.05
+        if req.red_flag:
+            p_pass = torch.zeros_like(p_pass)
         fresh_pass = (~pass_event) & (torch.rand((n,), device=device) < p_pass)
         pass_event |= fresh_pass
         pass_time = torch.where(fresh_pass, torch.full_like(pass_time, t), pass_time)
@@ -273,20 +322,25 @@ def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[l
     quantiles = torch.quantile(finish, torch.as_tensor([0.1, 0.25, 0.5, 0.75, 0.9], device=device)).detach().cpu().tolist()
     return frames, {"probs": probs, "finish": {"expected": float(finish.mean().item()), "quantiles": quantiles}, "gpu_ms": gpu_ms, "scenarios": n,
                     "final_speed_mps": float(speed.mean().item()), "final_gap_s": float(gap.mean().item()), "final_ers": float(battery.mean().item()),
-                    "final_fuel_kg": float(fuel.mean().item())}
+                    "final_fuel_kg": float(fuel.mean().item()), "conditions": {"weather": conditions["weather"], "rain_intensity": rain, "grip_factor": grip, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag}}
 
 
 def evidence(req: SimulationRequest, stats: dict[str, Any], label: str) -> dict[str, Any]:
     zone, sector, zone_type = _zone(req.gap_ahead_s * 130.0, req.track_length_m)
     return {"label": label, "lap": req.lap, "sector": sector, "zone": zone, "zone_type": zone_type, "gap_s": round(req.gap_ahead_s, 3),
             "speed_kph": round(req.speed_mps * 3.6, 1), "tire": req.tire_compound, "tire_age_laps": req.tire_age_laps,
-            "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "simulator": "GPU deterministic + Monte Carlo", "uncertainty": "scenario spread"}
+            "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "weather": req.weather, "rain_intensity": req.rain_intensity,
+            "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag, "simulator": "GPU deterministic + Monte Carlo", "uncertainty": "scenario spread"}
 
 
 def assess(req: SimulationRequest, include_frames: bool = False) -> dict[str, Any]:
     frames, stats = simulate_gpu(req, include_frames=include_frames)
     p = stats["probs"]
     recommendation = "ATTACK" if p["pass60"] >= 0.55 else "DEFEND" if p["pass60"] <= 0.22 and req.gap_ahead_s < 1.0 else "HOLD"
+    if req.red_flag:
+        recommendation = "HOLD"
+    elif req.vsc or req.safety_car:
+        recommendation = "CONSERVE"
     if req.decision == "RECOVER": recommendation = "RECOVER"
     if req.decision == "CONSERVE": recommendation = "CONSERVE"
     conf = max(0.51, min(0.98, 0.55 + abs(p["pass60"] - 0.5) * 0.8))
@@ -296,10 +350,38 @@ def assess(req: SimulationRequest, include_frames: bool = False) -> dict[str, An
                        "can_pass_within_60s": {"probability": p["pass60"], "confidence": conf, "window_s": 60, "evidence": evidence(req, stats, "60-second pass")},
                        "durable_pass": {"probability": p["durable"], "confidence": conf, "laps_ahead": 3, "evidence": evidence(req, stats, "durable pass")},
                        "finish_position": {"expected": stats["finish"]["expected"], "distribution": stats["finish"]["quantiles"], "quantiles": [0.1, 0.25, 0.5, 0.75, 0.9], "evidence": evidence(req, stats, "race finish")}},
-            "recommendation": {"action": recommendation, "confidence": conf, "rationale": f"{p['pass60']:.0%} modeled pass chance in the active zone; {p['durable']:.0%} remains ahead three laps later.", "override_allowed": True},
-            "model": {"decision_baseline": "v4-logistic", "forecaster": FORECASTER.version, "simulator": SERVICE_VERSION, "device": torch.cuda.get_device_name(0), "gpu_ms": stats["gpu_ms"], "scenarios": stats["scenarios"]},
-            "state": {"gap_ahead_s": req.gap_ahead_s, "speed_kph": req.speed_mps * 3.6, "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "data_quality": "simulated_gpu"},
+            "recommendation": {"action": recommendation, "confidence": conf, "rationale": f"{p['pass60']:.0%} modeled pass chance in the active zone; {p['durable']:.0%} remains ahead three laps later." if not req.red_flag else "Red flag active: racing is neutralized and the model holds position.", "override_allowed": True},
+            "model": {"decision_baseline": "v4-logistic", "forecaster": FORECASTER.version, "forecaster_output": {"horizons_s": [1, 2, 3, 4, 5], "predicted_speed_mps": forecast}, "simulator": SERVICE_VERSION, "device": torch.cuda.get_device_name(0), "gpu_ms": stats["gpu_ms"], "scenarios": stats["scenarios"]},
+            "state": {"gap_ahead_s": req.gap_ahead_s, "speed_kph": req.speed_mps * 3.6, "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "weather": req.weather, "rain_intensity": req.rain_intensity, "tire_compound": req.tire_compound, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag, "conditions": stats.get("conditions"), "data_quality": "simulated_gpu"},
             "frames": frames if include_frames else None}
+
+
+def zone_rows_from_assessment(base: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build the compact zone table from one shared GPU assessment.
+
+    The browser gets every zone in the bootstrap response without firing one
+    Monte Carlo request per row. Detailed frames remain available through the
+    replay route when a row is selected later.
+    """
+    names = [("T1", 1, "Braking"), ("T3", 1, "Overtake"), ("T6", 2, "Braking"),
+             ("T9", 2, "Overtake"), ("T11", 3, "Overtake"), ("T13", 3, "Braking")]
+    rows = []
+    for i, (name, sector, kind) in enumerate(names):
+        answers = {}
+        for key, value in base["answers"].items():
+            if not isinstance(value, dict):
+                answers[key] = value
+                continue
+            item = dict(value)
+            if "probability" in item:
+                factor = 1.0 + (0.06 if kind == "Overtake" else -0.035) - i * 0.008
+                item["probability"] = max(0.0, min(1.0, item["probability"] * factor))
+            item["evidence"] = dict(item.get("evidence") or {})
+            item["evidence"].update({"zone": name, "sector": sector, "zone_type": kind})
+            answers[key] = item
+        rows.append({"zone": name, "sector": sector, "type": kind, "assessment": answers,
+                     "recommendation": dict(base["recommendation"])})
+    return rows
 
 
 app = FastAPI(title="Overtiq GPU Race Engineer API", version=SERVICE_VERSION)
@@ -315,7 +397,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/physics/schema", dependencies=[Depends(authenticated)])
 def physics_schema() -> dict[str, Any]:
-    return {"schema": "OVERTIQ.PhysicsFrame.v1", "units": {"s_m": "m", "speed_mps": "m/s", "heading_rad": "rad", "gap_ahead_s": "s"}, "gpu_required": True}
+    return {"schema": "OVERTIQ.PhysicsFrame.v1", "units": {"s_m": "m", "speed_mps": "m/s", "heading_rad": "rad", "gap_ahead_s": "s", "rain_intensity": "0..1", "ers_fraction": "0..1", "fuel_kg": "kg"}, "controls": ["weather", "tire_compound", "rain_intensity", "ers_fraction", "fuel_kg", "vsc", "red_flag"], "gpu_required": True}
 
 
 @app.post("/physics/simulate", dependencies=[Depends(authenticated)])
@@ -336,12 +418,28 @@ def physics_compare(body: CompareRequest) -> dict[str, Any]:
 
 @app.get("/engineer/schema", dependencies=[Depends(authenticated)])
 def engineer_schema() -> dict[str, Any]:
-    return {"schema": "EngineerAssessment.v1", "answers": ["can_gain_position_within_3_laps", "can_pass_within_60s", "durable_pass", "finish_position"], "recommendations": ["HOLD", "ATTACK", "DEFEND", "CONSERVE", "RECOVER"], "gpu_required": True}
+    return {"schema": "EngineerAssessment.v1", "answers": ["can_gain_position_within_3_laps", "can_pass_within_60s", "durable_pass", "finish_position"], "recommendations": ["HOLD", "ATTACK", "DEFEND", "CONSERVE", "RECOVER"], "scenario_controls": ["weather", "tire_compound", "rain_intensity", "ers_fraction", "fuel_kg", "vsc", "red_flag"], "gpu_required": True}
 
 
 @app.post("/engineer/assess", dependencies=[Depends(authenticated)])
 def engineer_assess(body: AssessmentRequest) -> dict[str, Any]:
     return assess(body.request, include_frames=body.include_frames)
+
+
+@app.post("/engineer/bootstrap", dependencies=[Depends(authenticated)])
+def engineer_bootstrap(body: AssessmentRequest) -> dict[str, Any]:
+    """Single-request initial payload for the terminal.
+
+    This prevents page load fan-out: one GPU assessment, one frame window, and
+    the compact zone table arrive together. The browser caches this payload
+    for the session and does not poll on a timer.
+    """
+    request = body.request
+    assessment = assess(request, include_frames=False)
+    frames, _ = simulate_gpu(request, include_frames=True)
+    return {"schema": "EngineerBootstrap.v1", "gpu": {"available": True, "device": torch.cuda.get_device_name(0),
+            "model": FORECASTER.version}, "assessment": assessment, "frames": frames,
+            "zones": zone_rows_from_assessment(assessment), "request_count": 1}
 
 
 @app.post("/engineer/race-assessment", dependencies=[Depends(authenticated)])
@@ -370,20 +468,28 @@ def replay_frames(replay_id: str, offset: float = Query(default=0.0, ge=0), limi
 @app.get("/replays/{replay_id}/zones", dependencies=[Depends(authenticated)])
 def replay_zones(replay_id: str) -> dict[str, Any]:
     req = replay_request(replay_id)
-    zones = []
-    for name, sector, kind in [("T1", 1, "Braking"), ("T3", 1, "Overtake"), ("T6", 2, "Braking"), ("T9", 2, "Overtake"), ("T11", 3, "Overtake"), ("T13", 3, "Braking")]:
-        r = req.model_copy(update={"gap_ahead_s": 0.42 + sector * 0.12, "decision": "ATTACK"})
-        a = assess(r, include_frames=False)
-        zones.append({"zone": name, "sector": sector, "type": kind, "assessment": a["answers"], "recommendation": a["recommendation"]})
+    zones = zone_rows_from_assessment(assess(req, include_frames=False))
     return {"schema": "ReplayZones.v1", "replay_id": replay_id, "zones": zones}
 
 
 @app.websocket("/streams/{replay_id}")
-async def stream(websocket: WebSocket, replay_id: str, key: str | None = None) -> None:
+async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, weather: str | None = None,
+                 tire_compound: str | None = None, rain_intensity: float | None = None,
+                 ers_fraction: float | None = None, fuel_kg: float | None = None,
+                 vsc: bool | None = None, red_flag: bool | None = None, decision: str | None = None) -> None:
     if API_KEY and websocket.headers.get("x-overtiq-key") != API_KEY and key != API_KEY:
         await websocket.close(code=4401); return
     await websocket.accept()
-    req = replay_request(replay_id).model_copy(update={"horizon_s": 20.0, "dt": 0.25})
+    updates: dict[str, Any] = {"horizon_s": 60.0, "dt": 0.25}
+    if weather is not None: updates["weather"] = weather.upper()
+    if tire_compound is not None: updates["tire_compound"] = tire_compound.upper()
+    if rain_intensity is not None: updates["rain_intensity"] = max(0.0, min(1.0, rain_intensity))
+    if ers_fraction is not None: updates["ers_fraction"] = max(0.0, min(1.0, ers_fraction))
+    if fuel_kg is not None: updates["fuel_kg"] = max(0.0, min(110.0, fuel_kg))
+    if vsc is not None: updates["vsc"] = vsc
+    if red_flag is not None: updates["red_flag"] = red_flag
+    if decision in {"ATTACK", "DEFEND", "CONSERVE", "RECOVER"}: updates["decision"] = decision
+    req = replay_request(replay_id).model_copy(update=updates)
     try:
         frames, _ = simulate_gpu(req, include_frames=True)
         for frame in frames:
