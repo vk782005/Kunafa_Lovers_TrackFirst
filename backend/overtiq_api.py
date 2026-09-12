@@ -492,9 +492,13 @@ async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, w
     req = replay_request(replay_id).model_copy(update=updates)
     try:
         frames, _ = simulate_gpu(req, include_frames=True)
-        for frame in frames:
-            await websocket.send_json(frame)
-            await asyncio.sleep(0.05)
+        # Compute one device-resident scenario for this connection, then keep
+        # the live view alive by replaying the frame window. This avoids a
+        # second GPU request every time the one-minute window ends.
+        while True:
+            for frame in frames:
+                await websocket.send_json(frame)
+                await asyncio.sleep(0.05)
     except WebSocketDisconnect:
         return
 
