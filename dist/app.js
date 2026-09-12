@@ -150,7 +150,7 @@ function initThree() {
   povRenderer = new THREE.WebGLRenderer({ canvas: povCanvas, antialias: true, alpha: false });
   [trackRenderer, povRenderer].forEach(r => { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6)); r.outputColorSpace = THREE.SRGBColorSpace; });
   trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
-  trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.lookAt(0, 0, 0);
+  trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
   const road = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 160, 17, 8, true), new THREE.MeshBasicMaterial({ color: '#202b30' }));
   const line = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 160, 1.5, 5, true), new THREE.MeshBasicMaterial({ color: '#667879' }));
   trackScene.add(road, line, new THREE.AmbientLight('#ffffff', 1));
