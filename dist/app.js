@@ -1,7 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js';
 
 const $ = (id) => document.getElementById(id);
-const API_DEFAULT = new URLSearchParams(location.search).get('api') || sessionStorage.getItem('overtiq-endpoint') || 'https://computing-forestry-extraordinary-collapse.trycloudflare.com';
+const LOCAL_GPU_ENDPOINT = 'http://127.0.0.1:10200';
+const API_DEFAULT = new URLSearchParams(location.search).get('api') || sessionStorage.getItem('overtiq-endpoint') || LOCAL_GPU_ENDPOINT;
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const state = {
   apiBase: API_DEFAULT.replace(/\/$/, ''),
@@ -28,30 +29,6 @@ const state = {
   beforeControls: null,
   scenarioKey: ''
 };
-
-const demoFrame = {
-  schema: 'OVERTIQ.PhysicsFrame.v1', t: 0,
-  track: { session_key: '2026_11361', s_m: 0, length_m: 5278, x_m: 710, y_m: 290, heading_rad: 1.57, curvature_1_m: 0.0012, sector: 1, zone: 'T1', zone_type: 'Braking' },
-  pose: { x_m: 710, y_m: 290, z_m: 0, yaw_rad: 1.57, pitch_rad: 0, roll_rad: 0 },
-  kinematics: { speed_mps: 78.9, speed_kph: 284, accel_mps2: 0, yaw_rate_radps: 0, steering_rad: 0 },
-  controls: { throttle: .86, brake: .04, gear: 7, drs: false },
-  tires: { compound: 'MEDIUM', age_laps: 18, surface_temp_c: 89, wear: .34 },
-  energy: { ers_fraction: .62, fuel_kg: 42, fuel_lap_delta_kg: -1.72 },
-  flags: { safety_car: false, vsc: false, data_quality: 'demo_fixture' },
-  race: { driver_number: 31, driver_code: 'OCO', lap: 35, position: 14, gap_ahead_s: .558, decision: 'ATTACK' }
-};
-const demoAssessment = {
-  schema: 'EngineerAssessment.v1', driver: { number: 31, code: 'OCO', position: 14 }, decision: 'ATTACK',
-  answers: {
-    can_gain_position_within_3_laps: { probability: .61, confidence: .69, cutoff_lap: 38, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'GPU link pending' } },
-    can_pass_within_60s: { probability: .54, confidence: .67, window_s: 60, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'GPU link pending' } },
-    durable_pass: { probability: .39, confidence: .62, laps_ahead: 3, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'GPU link pending' } },
-    finish_position: { expected: 13.4, distribution: [12, 12.8, 13.5, 14.2, 15], quantiles: [.1, .25, .5, .75, .9], evidence: { zone: 'T1', sector: 1, simulator: 'GPU link pending' } }
-  },
-  recommendation: { action: 'ATTACK', confidence: .69, rationale: 'Remote GPU calculation is required for a live recommendation.', override_allowed: true },
-  model: { decision_baseline: 'v4-logistic', forecaster: 'forecaster_2026_v1.pt', simulator: 'GPU link pending', device: 'not connected', gpu_ms: null, scenarios: 0 }
-};
-const demoZones = ['T1','T3','T6','T9','T11','T13'].map((zone, i) => ({ zone, sector: Math.floor(i / 2) + 1, type: i % 2 ? 'Overtake' : 'Braking', assessment: demoAssessment.answers, recommendation: demoAssessment.recommendation }));
 
 let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig;
 const trackCurve = new THREE.CatmullRomCurve3([
@@ -97,26 +74,18 @@ function syncControlInputs() {
   [['vsc-toggle', state.controls.vsc], ['red-flag-toggle', state.controls.red_flag]].forEach(([id, active]) => { const b = $(id); b.dataset.active = String(active); b.classList.toggle('on', active); b.querySelector('span').textContent = active ? 'ON' : 'OFF'; });
 }
 function renderComparison() {
-  const before = state.beforeAssessment || state.assessment || demoAssessment, after = state.assessment || before;
-  const summary = (a) => { const x = a.answers || {}; return { pass: x.can_pass_within_60s?.probability ?? 0, durable: x.durable_pass?.probability ?? 0, gain: x.can_gain_position_within_3_laps?.probability ?? 0, finish: x.finish_position?.expected ?? null, action: a.recommendation?.action || 'HOLD' }; };
+  const before = state.beforeAssessment || null, after = state.assessment || null;
+  const summary = (a) => { const x = a?.answers || {}; return { pass: x.can_pass_within_60s?.probability ?? null, durable: x.durable_pass?.probability ?? null, gain: x.can_gain_position_within_3_laps?.probability ?? null, finish: x.finish_position?.expected ?? null, action: a?.recommendation?.action || '—' }; };
   const b = summary(before), n = summary(after), delta = (x, y) => Math.round((y - x) * 100);
   $('before-action').textContent = b.action; $('before-pass').textContent = fmtPct(b.pass); $('before-durable').textContent = fmtPct(b.durable); $('before-finish').textContent = b.finish == null ? '—' : 'P' + Number(b.finish).toFixed(1);
   $('after-action').textContent = n.action; $('after-pass').textContent = fmtPct(n.pass); $('after-durable').textContent = fmtPct(n.durable); $('after-finish').textContent = n.finish == null ? '—' : 'P' + Number(n.finish).toFixed(1);
-  $('scenario-delta').textContent = 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + (n.finish - b.finish).toFixed(1) + ' places' : '—');
+  $('scenario-delta').textContent = b.pass == null || n.pass == null ? 'WAITING FOR GPU BASELINE' : 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + (n.finish - b.finish).toFixed(1) + ' places' : '—');
 }
-function useDemo() {
-  state.frames = Array.from({ length: 241 }, (_, i) => ({ ...demoFrame, t: i * .25, track: { ...demoFrame.track, s_m: (i * 78.9 * .25) % 5278 }, race: { ...demoFrame.race, gap_ahead_s: .558 } }));
-  state.zones = demoZones;
-  state.assessment = demoAssessment;
-  state.beforeAssessment = demoAssessment;
-  state.beforeControls = { ...state.controls };
-  state.connected = false;
-  setStatus('LINK PENDING', false);
-  $('compute-sim').textContent = 'WAITING FOR GPU'; $('compute-physics').textContent = 'WAITING FOR GPU'; $('compute-model').textContent = 'WAITING FOR GPU'; $('compute-telemetry').textContent = 'NO FRAME'; $('compute-latency').textContent = '—'; $('compute-requests').textContent = '—';
-  renderAssessment();
-  renderComparison();
-  renderZones();
-  renderFrame();
+function clearLiveState() {
+  state.frames = []; state.zones = []; state.assessment = null; state.beforeAssessment = null; state.beforeControls = null; state.connected = false; state.time = 0; state.frameIndex = 0;
+  setStatus('CONNECTING', false);
+  $('compute-sim').textContent = 'CONNECTING'; $('compute-physics').textContent = 'CONNECTING'; $('compute-model').textContent = 'WAITING'; $('compute-telemetry').textContent = 'NO FRAME'; $('compute-latency').textContent = '—'; $('compute-requests').textContent = '0'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU LINK CONNECTING';
+  renderAssessment(); renderComparison(); renderZones(); renderFrame();
 }
 async function connectGpu() {
   if (state.connectPromise || state.connected) return state.connectPromise;
@@ -133,15 +102,19 @@ async function connectGpu() {
       $('data-note').textContent = 'Race engineer decision workspace · ' + (bootstrap.gpu?.model || 'model loaded');
       $('compute-requests').textContent = state.requestCount + ' BOOTSTRAP'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE'; renderAssessment(); renderComparison(); renderZones(); renderFrame(); startStream(true);
     } catch (error) {
-      state.connected = false; setStatus('LINK ERROR', false);
-      $('data-note').textContent = 'Remote GPU link unavailable · retry on refresh'; useDemo();
+      clearLiveState(); setStatus('GPU LINK ERROR', false);
+      $('data-note').textContent = 'GPU service unavailable · no synthetic data loaded'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU LINK UNAVAILABLE';
     } finally { state.connectPromise = null; }
   })();
   return state.connectPromise;
 }
 function renderFrame() {
   const frame = frameAtTime(state.time);
-  const k = frame.kinematics || demoFrame.kinematics, race = frame.race || demoFrame.race, track = frame.track || demoFrame.track;
+  if (!frame) {
+    ['hud-speed','hud-gear','hud-lap','speed','position','tyre-age','tyre-badge','lap'].forEach(id => { const node = $(id); if (node) node.textContent = '—'; });
+    $('race-state').textContent = 'WAITING FOR GPU'; $('race-state').classList.remove('vsc','red'); $('map-status').textContent = 'NO PHYSICS FRAME'; $('compute-telemetry').textContent = 'NO FRAME'; renderThree(null); return;
+  }
+  const k = frame.kinematics || {}, race = frame.race || {}, track = frame.track || {};
   const vsc = Boolean(frame.flags?.vsc || frame.flags?.safety_car), red = Boolean(frame.flags?.red_flag);
   $('hud-driver').textContent = (race.driver_code || 'OCO') + ' · ' + (race.driver_number || 31);
   $('hud-speed').textContent = Math.round((k.speed_kph ?? k.speed_mps * 3.6)) + ' KM/H';
@@ -162,7 +135,7 @@ function renderFrame() {
   renderThree(frame);
 }
 function frameAtTime(seconds) {
-  if (!state.frames.length) return demoFrame;
+  if (!state.frames.length) return null;
   const position = Math.max(0, Math.min(state.frames.length - 1, seconds / .25));
   const index = Math.floor(position), amount = position - index;
   const a = state.frames[index] || state.frames[state.frames.length - 1], b = state.frames[index + 1] || a;
@@ -176,14 +149,14 @@ function frameAtTime(seconds) {
   };
 }
 function renderAssessment() {
-  const a = state.assessment || demoAssessment, answers = a.answers || demoAssessment.answers;
+  const a = state.assessment, answers = a?.answers || {};
   [['gain','can_gain_position_within_3_laps'],['pass','can_pass_within_60s'],['durable','durable_pass']].forEach(([id, key]) => {
     const item = answers[key] || {}; const pct = fmtPct(item.probability);
     $('answer-' + id).textContent = pct; $('bar-' + id).style.width = (item.probability || 0) * 100 + '%';
     const e = item.evidence || {}; $('evidence-' + id).textContent = [e.zone || 'active zone', e.gap_s != null ? e.gap_s.toFixed(2) + 's gap' : '', e.speed_kph ? Math.round(e.speed_kph) + ' km/h' : '', e.simulator || ''].filter(Boolean).join(' · ');
   });
   const finish = answers.finish_position || {}; $('finish-expected').textContent = finish.expected == null ? '—' : 'P' + Number(finish.expected).toFixed(1);
-  $('finish-note').textContent = a.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'GPU scenario distribution';
+  $('finish-note').textContent = a?.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'Waiting for the remote GPU assessment.';
   const vals = finish.distribution || [];
   $('finish-bars').innerHTML = vals.map((value, i) => '<div class="finish-bar"><span>P' + Number(value).toFixed(0) + '</span><i style="width:' + Math.max(12, 100 - i * 15) + '%"></i></div>').join('');
   $('assessment-time').textContent = a.model?.gpu_ms != null ? Math.round(a.model.gpu_ms) + ' ms GPU' : 'REMOTE COMPUTE';
@@ -198,7 +171,7 @@ function renderZones() {
     const a = z.assessment || {}; const pass = a.can_pass_within_60s?.probability ?? 0; const durable = a.durable_pass?.probability ?? 0;
     const action = z.recommendation?.action || 'HOLD';
     return '<tr><td><b>' + z.zone + '</b></td><td>S' + z.sector + '</td><td><span class="zone-type ' + String(z.type || '').toLowerCase() + '">' + (z.type || 'ZONE') + '</span></td><td class="probability">' + fmtPct(pass) + '</td><td class="probability">' + fmtPct(durable) + '</td><td><strong class="action-' + action.toLowerCase() + '">' + action + '</strong></td></tr>';
-  }).join('') : '<tr><td colspan="6" class="empty-row">No zones returned by the GPU service.</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty-row">Waiting for live GPU zone assessment.</td></tr>';
 }
 function initThree() {
   const trackCanvas = $('track-canvas'), povCanvas = $('pov-canvas');
@@ -312,6 +285,6 @@ document.addEventListener('keydown', e => { if (/INPUT|SELECT|BUTTON|TEXTAREA/.t
 const context = document.modelContext;
 if (context?.registerTool) { try { context.registerTool({ name: 'configure_race_replay', title: 'Configure GPU race replay', description: 'Seek the remote GPU Overtiq replay and set playback state.', inputSchema: { type: 'object', properties: { seconds: { type: 'number', minimum: 0, maximum: 60 }, playing: { type: 'boolean' } }, required: ['seconds', 'playing'], additionalProperties: false }, execute(input) { seek(input.seconds); state.playing = input.playing; return { seconds: state.time, driver: 'OCO', playing: state.playing, gpuBacked: state.connected }; } }); } catch {} }
 
-initThree(); syncControlInputs(); useDemo(); requestAnimationFrame(tick);
+initThree(); syncControlInputs(); clearLiveState(); requestAnimationFrame(tick);
 if (state.apiBase) connectGpu();
 

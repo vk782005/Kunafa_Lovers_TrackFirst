@@ -31,7 +31,7 @@ POST and WebSocket requests use the remote `x-overtiq-key`. The terminal auto-co
 
 The decision baseline is the calibrated `v4-logistic` model. The GPU forecaster artifact (`forecaster_2026_v1.pt`) consumes 26 telemetry features and returns 1–5 second speed forecasts. The CUDA simulator uses those inputs with vehicle state, grip, energy, fuel, opponent response, and Monte Carlo branches to return probabilities, finish-position quantiles, evidence, and a recommendation.
 
-The current instance exposes the API through a supervised HTTPS quick tunnel. Quick tunnels are ephemeral; replace the endpoint in `dist/app.js` with a named HTTPS tunnel for production uptime.
+The current workflow is localhost-only. The browser talks to `http://127.0.0.1:10200`, which is an SSH forward to the GPU service; no Site deployment or public tunnel is required.
 
 ## Local preview
 
@@ -42,4 +42,12 @@ python -m http.server 4173 --directory dist
 ```
 
 Open `http://localhost:4173`. The terminal auto-connects to the remote GPU service and uses the read-only fixture only when the remote link is unavailable.
+
+For the localhost workflow, forward the GPU API over SSH and keep the terminal on loopback:
+
+```powershell
+ssh -i "C:\Users\Windows 10\.ssh\id_ed25519_vast" -p 41103 -L 10200:127.0.0.1:10200 root@122.59.250.166
+```
+
+The local build uses `http://127.0.0.1:10200` automatically and does not load synthetic demo values while connecting.
 
