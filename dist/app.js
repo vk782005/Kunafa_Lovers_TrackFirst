@@ -1,8 +1,9 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js';
+import * as THREE from './three.module.js';
 
 const $ = (id) => document.getElementById(id);
 const LOCAL_GPU_ENDPOINT = 'http://127.0.0.1:10200';
-const API_DEFAULT = new URLSearchParams(location.search).get('api') || sessionStorage.getItem('overtiq-endpoint') || LOCAL_GPU_ENDPOINT;
+const LOCAL_HOST = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const API_DEFAULT = new URLSearchParams(location.search).get('api') || (LOCAL_HOST ? LOCAL_GPU_ENDPOINT : (sessionStorage.getItem('overtiq-endpoint') || LOCAL_GPU_ENDPOINT));
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const state = {
   apiBase: API_DEFAULT.replace(/\/$/, ''),
@@ -11,6 +12,7 @@ const state = {
   zones: [],
   assessment: null,
   frameIndex: 0,
+  beforeFrames: [],
   time: 0,
   playing: false,
   rate: 1,
@@ -31,6 +33,7 @@ const state = {
 };
 
 let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig;
+const comparisonViews = { before: null, after: null };
 const trackCurve = new THREE.CatmullRomCurve3([
   new THREE.Vector3(300, 0, -15), new THREE.Vector3(210, 0, 70), new THREE.Vector3(120, 0, 180), new THREE.Vector3(40, 0, 245),
   new THREE.Vector3(-100, 0, 220), new THREE.Vector3(-220, 0, 120), new THREE.Vector3(-250, 0, -10),
@@ -52,9 +55,15 @@ async function api(path, options = {}) {
   if (!state.apiBase) throw new Error('No GPU endpoint configured');
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (state.apiKey) headers['x-overtiq-key'] = state.apiKey;
-  const response = await fetch(state.apiBase + path, { ...options, headers });
-  if (!response.ok) throw new Error('GPU service returned ' + response.status);
-  return response.json();
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(state.apiBase + path, { ...options, headers, signal: controller.signal, mode: 'cors', cache: 'no-store' });
+    if (!response.ok) throw new Error('GPU service returned ' + response.status);
+    return response.json();
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('GPU request timed out at ' + state.apiBase);
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 function requestPayload(decision = state.decision) {
   return { session_key: '2026_11361', driver_number: 31, driver_code: 'OCO', lap: 35, position: 14, gap_ahead_s: .558, speed_mps: 78.9, decision, horizon_s: 60, n_scenarios: 256,
@@ -80,9 +89,17 @@ function renderComparison() {
   $('before-action').textContent = b.action; $('before-pass').textContent = fmtPct(b.pass); $('before-durable').textContent = fmtPct(b.durable); $('before-finish').textContent = b.finish == null ? '—' : 'P' + Number(b.finish).toFixed(1);
   $('after-action').textContent = n.action; $('after-pass').textContent = fmtPct(n.pass); $('after-durable').textContent = fmtPct(n.durable); $('after-finish').textContent = n.finish == null ? '—' : 'P' + Number(n.finish).toFixed(1);
   $('scenario-delta').textContent = b.pass == null || n.pass == null ? 'WAITING FOR GPU BASELINE' : 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + (n.finish - b.finish).toFixed(1) + ' places' : '—');
+  $('before-condition').textContent = conditionLabel(state.beforeControls);
+  $('after-condition').textContent = conditionLabel(state.controls);
+  renderComparisonViews();
+}
+function conditionLabel(controls) {
+  if (!controls) return 'WAITING FOR GPU';
+  const flags = controls.red_flag ? 'RED FLAG' : controls.vsc ? 'VSC' : 'GREEN';
+  return [controls.weather || 'DRY', controls.tire_compound || 'MEDIUM', flags].join(' · ');
 }
 function clearLiveState() {
-  state.frames = []; state.zones = []; state.assessment = null; state.beforeAssessment = null; state.beforeControls = null; state.connected = false; state.time = 0; state.frameIndex = 0;
+  state.frames = []; state.beforeFrames = []; state.zones = []; state.assessment = null; state.beforeAssessment = null; state.beforeControls = null; state.connected = false; state.time = 0; state.frameIndex = 0;
   setStatus('CONNECTING', false);
   $('compute-sim').textContent = 'CONNECTING'; $('compute-physics').textContent = 'CONNECTING'; $('compute-model').textContent = 'WAITING'; $('compute-telemetry').textContent = 'NO FRAME'; $('compute-latency').textContent = '—'; $('compute-requests').textContent = '0'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU LINK CONNECTING';
   renderAssessment(); renderComparison(); renderZones(); renderFrame();
@@ -93,7 +110,7 @@ async function connectGpu() {
   state.connectPromise = (async () => {
     try {
       const bootstrap = await api('/engineer/bootstrap', { method: 'POST', body: JSON.stringify({ request: requestPayload(), include_frames: true }) });
-      state.frames = bootstrap.frames || []; state.assessment = bootstrap.assessment; state.zones = bootstrap.zones || []; state.zoneLoaded = true; state.connected = true; state.requestCount = bootstrap.request_count || 1;
+      state.frames = bootstrap.frames || []; state.beforeFrames = (bootstrap.frames || []).slice(); state.assessment = bootstrap.assessment; state.zones = bootstrap.zones || []; state.zoneLoaded = true; state.connected = true; state.requestCount = bootstrap.request_count || 1;
       state.beforeAssessment = bootstrap.assessment; state.beforeControls = { ...state.controls }; state.scenarioKey = scenarioKey();
       state.assessmentCache.set(state.scenarioKey, { assessment: bootstrap.assessment, frames: bootstrap.frames || [] });
       sessionStorage.setItem('overtiq-endpoint', state.apiBase); sessionStorage.setItem('overtiq-key', state.apiKey);
@@ -132,13 +149,16 @@ function renderFrame() {
   $('time-label').innerHTML = new Date((state.time || 0) * 1000).toISOString().slice(14, 19) + ' <span>/ 01:00</span>';
   $('timeline').value = state.time;
   $('timeline').style.background = 'linear-gradient(to right,#b7f578 ' + (state.time / 60 * 100) + '%,#303b3d ' + (state.time / 60 * 100) + '%)';
-  renderThree(frame);
+  renderThree(frame); renderComparisonViews();
 }
 function frameAtTime(seconds) {
-  if (!state.frames.length) return null;
-  const position = Math.max(0, Math.min(state.frames.length - 1, seconds / .25));
+  return frameAtTimeFrom(state.frames, seconds);
+}
+function frameAtTimeFrom(frames, seconds) {
+  if (!frames?.length) return null;
+  const position = Math.max(0, Math.min(frames.length - 1, seconds / .25));
   const index = Math.floor(position), amount = position - index;
-  const a = state.frames[index] || state.frames[state.frames.length - 1], b = state.frames[index + 1] || a;
+  const a = frames[index] || frames[frames.length - 1], b = frames[index + 1] || a;
   const lerp = (x, y) => Number.isFinite(x) && Number.isFinite(y) ? x + (y - x) * amount : x;
   return { ...a,
     t: lerp(a.t, b.t),
@@ -203,12 +223,60 @@ function initThree() {
   const dashScreen = new THREE.Mesh(new THREE.BoxGeometry(12, 3, .35), new THREE.MeshBasicMaterial({ color: '#b7f578' })); dashScreen.position.set(0, 7.1, 8); povRig.add(dashScreen);
   const sidePod = new THREE.Mesh(new THREE.BoxGeometry(9, 5, 23), new THREE.MeshStandardMaterial({ color: '#20282b', roughness: .58, metalness: .3 })); sidePod.position.set(-20, 1, 13); povRig.add(sidePod); povRig.add(sidePod.clone().translateX(40));
   povScene.add(new THREE.HemisphereLight('#bfd7e6', '#101719', 1.2), new THREE.DirectionalLight('#dbe9e5', 1.35));
+  initComparisonViews();
   resizeThree(); window.addEventListener('resize', resizeThree);
+}
+function initComparisonViews() {
+  comparisonViews.before = makeComparisonView('before-race-canvas');
+  comparisonViews.after = makeComparisonView('after-race-canvas');
+}
+function makeComparisonView(canvasId) {
+  const canvas = $(canvasId);
+  if (!canvas) return null;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.autoClear = false;
+  const trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
+  const trackCamera = new THREE.OrthographicCamera(-340, 340, 245, -245, .1, 2000);
+  trackCamera.position.set(0, 620, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
+  const road = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 128, 15, 7, true), new THREE.MeshBasicMaterial({ color: '#202c30' }));
+  const edge = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 128, 1.4, 5, true), new THREE.MeshBasicMaterial({ color: '#728383' }));
+  trackScene.add(road, edge, new THREE.AmbientLight('#dce8e4', 1));
+  const trackCar = new THREE.Mesh(new THREE.SphereGeometry(9, 14, 10), new THREE.MeshBasicMaterial({ color: '#b7f578' }));
+  const trackOpp = new THREE.Mesh(new THREE.SphereGeometry(7, 14, 10), new THREE.MeshBasicMaterial({ color: '#f479a2' }));
+  trackScene.add(trackCar, trackOpp);
+  const povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
+  const povCamera = new THREE.PerspectiveCamera(67, 1, .1, 2000); povCamera.position.set(0, 14, 26); povCamera.rotation.x = -.08;
+  const povRig = new THREE.Group(); povScene.add(povRig);
+  const roadPlane = new THREE.Mesh(new THREE.PlaneGeometry(150, 1100), new THREE.MeshStandardMaterial({ color: '#141a1d', roughness: .97, metalness: .02 }));
+  roadPlane.rotation.x = -Math.PI / 2; roadPlane.position.z = -500; povRig.add(roadPlane);
+  for (let i = 0; i < 24; i++) { const dash = new THREE.Mesh(new THREE.BoxGeometry(.3, .035, 7), new THREE.MeshBasicMaterial({ color: '#89948e' })); dash.position.set(0, .05, -i * 40 - 26); povRig.add(dash); }
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6, 1100), new THREE.MeshStandardMaterial({ color: '#5e706d', roughness: .75, metalness: .25 })); rail.position.set(side * 17, 3, -500); povRig.add(rail);
+    for (let i = 0; i < 24; i++) { const kerb = new THREE.Mesh(new THREE.BoxGeometry(3.2, .25, 14), new THREE.MeshStandardMaterial({ color: i % 2 ? '#cf6170' : '#eef0dc', roughness: .82 })); kerb.position.set(side * 15, .28, -i * 40 - 28); povRig.add(kerb); }
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(11.5, 1.35, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: '#080b0d' })); halo.rotation.z = Math.PI; halo.position.set(0, 12, 2); povRig.add(halo);
+  const wheel = new THREE.Group(); wheel.position.set(0, -1.5, 18); povRig.add(wheel);
+  const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(7.2, 1.5, 8, 22), new THREE.MeshBasicMaterial({ color: '#07090a' })); wheelRing.scale.set(1.18, .72, .56); wheel.add(wheelRing);
+  for (let i = 0; i < 3; i++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(.9, 8.5, .8), new THREE.MeshBasicMaterial({ color: '#778485' })); spoke.rotation.z = i * Math.PI / 3; wheel.add(spoke); }
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(31, 3.2, 9), new THREE.MeshBasicMaterial({ color: '#0a0e10' })); dash.position.set(0, 4.7, 12); povRig.add(dash);
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(9, 2.2, .3), new THREE.MeshBasicMaterial({ color: '#b7f578' })); screen.position.set(0, 6.2, 8); povRig.add(screen);
+  for (const side of [-1, 1]) { const pod = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 18), new THREE.MeshStandardMaterial({ color: '#20282b', roughness: .6, metalness: .25 })); pod.position.set(side * 16, 1, 13); povRig.add(pod); }
+  povScene.add(new THREE.HemisphereLight('#bfd7e6', '#101719', 1.15), new THREE.DirectionalLight('#dbe9e5', 1.2));
+  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig, wheel };
 }
 function resizeThree() {
   const box = $('visual-wrap').getBoundingClientRect(), w = Math.max(320, box.width), h = Math.max(280, box.height - 2);
   trackRenderer?.setSize(w, h, false); povRenderer?.setSize(w, h, false);
   if (povCamera) { povCamera.aspect = w / h; povCamera.updateProjectionMatrix(); }
+  Object.values(comparisonViews).forEach(view => {
+    if (!view) return;
+    const box = view.canvas.getBoundingClientRect(), w = Math.max(260, box.width), h = Math.max(190, box.height);
+    view.renderer.setSize(w, h, false);
+    view.povCamera.aspect = Math.max(1, (w / 2) / h); view.povCamera.updateProjectionMatrix();
+  });
+  renderComparisonViews();
 }
 function renderThree(frame) {
   if (!trackRenderer || !frame) return;
@@ -222,6 +290,44 @@ function renderThree(frame) {
   povCamera.rotation.y = steer * .035;
   povRig.position.z = -((frame.track?.s_m || 0) % 42) * .018;
   if (state.view === 'pov') povRenderer.render(povScene, povCamera); else trackRenderer.render(trackScene, trackCamera);
+}
+function renderComparisonViews() {
+  const before = frameAtTimeFrom(state.beforeFrames, state.time);
+  const after = frameAtTimeFrom(state.frames, state.time);
+  renderComparisonView(comparisonViews.before, before, 'before');
+  renderComparisonView(comparisonViews.after, after, 'after');
+  const clock = new Date(Math.max(0, state.time || 0) * 1000).toISOString().slice(14, 19);
+  $('before-race-time').textContent = clock; $('after-race-time').textContent = clock;
+  $('before-race-lap').textContent = before?.race?.lap != null ? 'L' + before.race.lap : 'WAITING';
+  $('after-race-lap').textContent = after?.race?.lap != null ? 'L' + after.race.lap : 'WAITING';
+  setComparisonTelemetry('before', before); setComparisonTelemetry('after', after);
+}
+function setComparisonTelemetry(prefix, frame) {
+  const k = frame?.kinematics || {}, race = frame?.race || {}, flags = frame?.flags || {};
+  const stateLabel = flags.red_flag ? 'RED' : (flags.vsc || flags.safety_car ? 'VSC' : (frame ? 'GREEN' : 'WAIT'));
+  $(prefix + '-race-speed').textContent = frame ? Math.round(k.speed_kph ?? ((k.speed_mps || 0) * 3.6)) + ' KPH' : '—';
+  $(prefix + '-race-gear').textContent = frame ? String(frame.controls?.gear ?? 7) : '—';
+  $(prefix + '-race-gap').textContent = frame && race.gap_ahead_s != null ? Number(race.gap_ahead_s).toFixed(2) + ' S' : '—';
+  $(prefix + '-race-state').textContent = stateLabel;
+  $(prefix + '-race-state').classList.toggle('alert', stateLabel === 'RED' || stateLabel === 'VSC');
+}
+function renderComparisonView(view, frame, side) {
+  if (!view) return;
+  const renderer = view.renderer, canvas = view.canvas;
+  const width = canvas.width || 520, height = canvas.height || 240, half = Math.floor(width / 2);
+  renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
+  renderer.setViewport(0, 0, half, height); renderer.setScissor(0, 0, half, height);
+  const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
+  const p = trackCurve.getPointAt((s % 1 + 1) % 1), op = trackCurve.getPointAt((s + Math.min(.08, gap / 80)) % 1);
+  view.trackCar.position.copy(p); view.trackCar.position.y = 11; view.trackOpp.position.copy(op); view.trackOpp.position.y = 9;
+  renderer.render(view.trackScene, view.trackCamera);
+  renderer.setViewport(half, 0, width - half, height); renderer.setScissor(half, 0, width - half, height);
+  const steer = frame?.kinematics?.steering_rad || 0, speed = frame?.kinematics?.speed_mps || 78, yaw = frame?.kinematics?.yaw_rate_radps || 0;
+  view.wheel.rotation.z = -steer * .7; view.povRig.rotation.z = (frame?.pose?.roll_rad || 0) * .65; view.povRig.rotation.x = (frame?.pose?.pitch_rad || 0) * .5;
+  view.povCamera.position.y = 14 + Math.min(.6, Math.abs(yaw) * 2); view.povCamera.position.z = 26 - Math.min(1.1, Math.abs(speed - 78) * .02); view.povCamera.rotation.y = steer * .035;
+  view.povRig.position.z = -((frame?.track?.s_m || 0) % 42) * .02;
+  renderer.render(view.povScene, view.povCamera);
+  renderer.setScissorTest(false);
 }
 function setView(view) {
   state.view = view; $('visual-wrap').classList.toggle('pov-mode', view === 'pov'); $('view-label').textContent = view === 'pov' ? 'DRIVER POV' : 'CIRCUIT VIEW';
@@ -237,8 +343,9 @@ function startStream(force = false) {
   const wsUrl = state.apiBase.replace(/^http/, 'ws') + '/streams/2026_11361?' + params.toString();
   const socket = new WebSocket(wsUrl); state.stream = socket; $('live-stream').classList.add('active'); $('live-stream').textContent = 'STOP STREAM'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM CONNECTING';
   socket.onopen = () => { if (state.stream === socket) $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE'; };
+  socket.onerror = () => { if (state.stream === socket) { $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM ERROR'; $('data-note').textContent = 'GPU frame stream handshake failed'; } };
   socket.onmessage = event => { const frame = JSON.parse(event.data); if (state.frames.length > 260 || (state.frames.length && frame.t === 0)) state.frames = []; state.frames.push(frame); state.frameIndex = state.frames.length - 1; state.time = frame.t || state.time; renderFrame(); };
-  socket.onclose = () => { if (state.stream !== socket) return; state.stream = null; $('live-stream').classList.remove('active'); $('live-stream').innerHTML = 'GPU STREAM <span>●</span>'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM READY'; };
+  socket.onclose = event => { if (state.stream !== socket) return; state.stream = null; $('live-stream').classList.remove('active'); $('live-stream').innerHTML = 'GPU STREAM <span>●</span>'; $('sim-state').innerHTML = '<i class="live-dot"></i> ' + (event.code === 4401 ? 'GPU STREAM UNAUTHORIZED' : 'GPU STREAM READY'); };
 }
 async function applyScenario() {
   controlsFromInputs();
