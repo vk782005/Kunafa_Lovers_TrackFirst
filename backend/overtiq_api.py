@@ -29,6 +29,20 @@ API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
 SERVICE_VERSION = "overtiq-gpu-0.2.0"
 
+# Stable track identifiers shared by the engineer terminal and remote API.
+# Geometry is resolved by the simulator; this catalog gives the UI and API a
+# single source for race length and lap count when a scenario is switched.
+TRACK_CATALOG = [
+    {"id": "AUS", "name": "Albert Park", "country": "Australia", "length_m": 5278.0, "laps": 58},
+    {"id": "BHR", "name": "Sakhir", "country": "Bahrain", "length_m": 5412.0, "laps": 57},
+    {"id": "JPN", "name": "Suzuka", "country": "Japan", "length_m": 5807.0, "laps": 53},
+    {"id": "ITA", "name": "Monza", "country": "Italy", "length_m": 5793.0, "laps": 53},
+    {"id": "GBR", "name": "Silverstone", "country": "Great Britain", "length_m": 5891.0, "laps": 52},
+    {"id": "MCO", "name": "Monaco", "country": "Monaco", "length_m": 3337.0, "laps": 78},
+    {"id": "BEL", "name": "Spa-Francorchamps", "country": "Belgium", "length_m": 7004.0, "laps": 44},
+    {"id": "SGP", "name": "Marina Bay", "country": "Singapore", "length_m": 4940.0, "laps": 62},
+]
+
 # Simulation results are intentionally cached on the GPU service.  A browser
 # refresh or a transport reconnect must not launch a second Monte Carlo job for
 # the same race state.  The cache stores only compact response objects and is
@@ -60,6 +74,7 @@ async def authenticated(x_overtiq_key: str | None = Header(default=None)) -> Non
 class SimulationRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
     session_key: str = "2026_11361"
+    track_id: str = "AUS"
     driver_number: int = 31
     driver_code: str = "OCO"
     lap: int = Field(default=35, ge=1)
@@ -455,6 +470,11 @@ def health() -> dict[str, Any]:
     return {"status": "ok", "gpu": {"available": True, "device": torch.cuda.get_device_name(0), "memory_allocated_mb": round(torch.cuda.memory_allocated(0) / 1e6, 1), "memory_reserved_mb": round(torch.cuda.memory_reserved(0) / 1e6, 1)}, "model": FORECASTER.version, "simulation_cache": cache, "service": SERVICE_VERSION}
 
 
+@app.get("/tracks", dependencies=[Depends(authenticated)])
+def tracks() -> dict[str, Any]:
+    return {"schema": "TrackCatalog.v1", "tracks": TRACK_CATALOG, "count": len(TRACK_CATALOG)}
+
+
 @app.get("/physics/schema", dependencies=[Depends(authenticated)])
 def physics_schema() -> dict[str, Any]:
     return {"schema": "OVERTIQ.PhysicsFrame.v1", "units": {"s_m": "m", "speed_mps": "m/s", "heading_rad": "rad", "gap_ahead_s": "s", "rain_intensity": "0..1", "ers_fraction": "0..1", "fuel_kg": "kg"}, "controls": ["weather", "tire_compound", "rain_intensity", "ers_fraction", "fuel_kg", "vsc", "red_flag"], "gpu_required": True}
@@ -536,7 +556,8 @@ def replay_zones(replay_id: str) -> dict[str, Any]:
 async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, weather: str | None = None,
                  tire_compound: str | None = None, rain_intensity: float | None = None,
                  ers_fraction: float | None = None, fuel_kg: float | None = None,
-                 vsc: bool | None = None, red_flag: bool | None = None, decision: str | None = None) -> None:
+                 vsc: bool | None = None, red_flag: bool | None = None, decision: str | None = None,
+                 track_id: str | None = None, track_length_m: float | None = None) -> None:
     if API_KEY and websocket.headers.get("x-overtiq-key") != API_KEY and key != API_KEY:
         await websocket.close(code=4401); return
     await websocket.accept()
@@ -549,6 +570,8 @@ async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, w
     if vsc is not None: updates["vsc"] = vsc
     if red_flag is not None: updates["red_flag"] = red_flag
     if decision in {"ATTACK", "DEFEND", "CONSERVE", "RECOVER"}: updates["decision"] = decision
+    if track_id is not None: updates["track_id"] = track_id.upper()
+    if track_length_m is not None: updates["track_length_m"] = max(1000.0, track_length_m)
     req = replay_request(replay_id).model_copy(update=updates)
     try:
         frames = await _stream_frames(req)
@@ -568,7 +591,8 @@ async def stream_events(replay_id: str, key: str | None = None, weather: str | N
                         tire_compound: str | None = None, rain_intensity: float | None = None,
                         ers_fraction: float | None = None, fuel_kg: float | None = None,
                         vsc: bool | None = None, red_flag: bool | None = None,
-                        decision: str | None = None) -> StreamingResponse:
+                        decision: str | None = None, track_id: str | None = None,
+                        track_length_m: float | None = None) -> StreamingResponse:
     """Long-lived newline-delimited frame stream for browser/proxy compatibility.
 
     A single GPU scenario is computed when the stream opens, then the compact
@@ -586,6 +610,8 @@ async def stream_events(replay_id: str, key: str | None = None, weather: str | N
     if vsc is not None: updates["vsc"] = vsc
     if red_flag is not None: updates["red_flag"] = red_flag
     if decision in {"ATTACK", "DEFEND", "CONSERVE", "RECOVER"}: updates["decision"] = decision
+    if track_id is not None: updates["track_id"] = track_id.upper()
+    if track_length_m is not None: updates["track_length_m"] = max(1000.0, track_length_m)
     req = replay_request(replay_id).model_copy(update=updates)
 
     async def events():
