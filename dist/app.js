@@ -1,109 +1,237 @@
-(() => {
-  'use strict';
-  const $ = id => document.getElementById(id);
-  const povStyle = document.createElement('style');
-  povStyle.textContent = `.panel-top{position:relative}.view-controls{display:flex;gap:4px;margin-left:auto;margin-right:18px}.view-button{border:1px solid #303b3e;background:#151d20;color:#899698;border-radius:2px;padding:7px 9px;font:10px var(--mono);letter-spacing:.8px}.view-button.active{background:var(--lime);border-color:var(--lime);color:#101710}.view-button:hover{color:var(--lime)}.view-button.active:hover{color:#101710}.pov-view{display:none;position:absolute;inset:0;overflow:hidden;background:#0b1013}.map-wrap.pov-mode #map,.map-wrap.pov-mode .map-legend,.map-wrap.pov-mode .lap-overlay{opacity:0;pointer-events:none}.map-wrap.pov-mode .pov-view{display:block}.pov-sky{height:45%;padding:28px 30px;display:flex;justify-content:space-between;color:#94a1a4;font:11px var(--mono);letter-spacing:1px;background:linear-gradient(180deg,#101b22 0%,#192831 65%,#4b5552 100%)}.pov-sky span:last-child{color:var(--lime)}.pov-track{position:absolute;inset:23% 0 0;background:linear-gradient(180deg,#3d4748 0%,#1e292c 24%,#111719 100%);clip-path:polygon(40% 0,60% 0,100% 100%,0 100%);perspective:500px}.pov-track:before,.pov-track:after{content:"";position:absolute;top:1%;height:99%;width:5px;background:repeating-linear-gradient(180deg,#eef0dc 0 16px,#cf6170 16px 30px);opacity:.9}.pov-track:before{left:39%}.pov-track:after{right:39%}.pov-horizon{position:absolute;top:4%;left:32%;right:32%;height:2px;background:#a1afa9;opacity:.35}.pov-apex{position:absolute;top:29%;left:50%;width:20px;height:20px;transform:translateX(-50%) rotate(45deg);border-top:2px solid var(--lime);border-right:2px solid var(--lime);opacity:.7}.pov-hud{position:absolute;left:30px;right:30px;bottom:70px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:13px 15px;border:1px solid #667271;background:#0b1013c7;color:#b8c3c2}.pov-hud small{display:block;color:#7f8c8d;font:10px var(--mono);letter-spacing:1px;margin-bottom:4px}.pov-hud strong{font:24px 'Barlow Condensed',sans-serif;color:var(--lime);letter-spacing:.3px}.pov-hud em{font:10px var(--mono);font-style:normal;color:#9babaa;margin-left:4px}.pov-wheel{position:absolute;left:50%;bottom:-68px;width:230px;height:130px;transform:translateX(-50%);border:13px solid #101619;border-radius:50% 50% 0 0;color:#708082;text-align:center;padding-top:17px;font:11px var(--mono);letter-spacing:2px;box-shadow:0 -3px 0 #556063}.pov-wheel:before,.pov-wheel:after{content:"";position:absolute;top:38px;width:9px;height:50px;background:#161f22}.pov-wheel:before{left:52px;transform:rotate(27deg)}.pov-wheel:after{right:52px;transform:rotate(-27deg)}.pov-wheel i{display:block;width:9px;height:9px;background:var(--lime);border-radius:50%;margin:8px auto}.pov-note{position:absolute;left:30px;bottom:25px;color:#859394;font:10px var(--mono);letter-spacing:1px}.pov-note .live-dot{margin-right:7px}.driver-lock{margin:0 18px 4px;border:1px solid #303b3e;background:#131a1d;padding:11px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px}.driver-lock span{font:10px var(--mono);letter-spacing:1px;color:var(--muted)}.driver-lock strong{font:11px var(--mono);color:var(--lime);font-weight:500}.select-label{display:none}@media(max-width:800px){.view-controls{margin-right:10px}.view-button{padding:6px 7px;font-size:9px}.pov-sky{padding:20px 18px;font-size:9px}.pov-hud{left:18px;right:18px;bottom:62px}.pov-note{left:18px;bottom:18px}.driver-lock{margin-bottom:2px}}@media(max-width:480px){.panel-top{gap:5px}.panel-top>span:first-child{font-size:10px}.view-controls{margin-right:0}.view-button{padding:6px 5px;font-size:8px}.pov-sky{height:42%;padding:18px 15px;flex-direction:column;gap:6px}.pov-hud{left:12px;right:12px;bottom:54px;padding:10px;gap:4px}.pov-hud strong{font-size:21px}.pov-note{left:12px;bottom:14px}.pov-wheel{width:190px}.driver-lock strong{font-size:10px}}`;
-  document.head.appendChild(povStyle);
-  const povImageStyle = document.createElement('style');
-  povImageStyle.textContent = `.pov-cockpit-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.82) contrast(1.08) brightness(.82);transform:scale(1.045);transition:filter .35s ease}.pov-view:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#0710163d 0%,transparent 38%,#060c0fc7 100%)}.pov-view .pov-cockpit-image{z-index:0}.pov-view .pov-sky,.pov-view .pov-hud,.pov-view .pov-note{z-index:2}.pov-view .pov-track,.pov-view .pov-wheel{display:none}.pov-sky{position:absolute;inset:0 0 auto;height:auto;background:linear-gradient(180deg,#071016bb 0%,transparent 100%)}.pov-hud{bottom:28px;background:#081014c9;backdrop-filter:blur(4px);border-color:#80908d66}.pov-note{bottom:10px}.map-wrap.pov-mode .pov-cockpit-image{animation:pov-camera 2.8s ease-in-out infinite;will-change:transform}.map-wrap.pov-mode .pov-hud{animation:pov-hud 1.7s ease-in-out infinite alternate}@keyframes pov-camera{0%,100%{transform:scale(1.045) translate3d(-.25%,0,0) rotate(.08deg)}50%{transform:scale(1.055) translate3d(.25%,-.18%,0) rotate(-.08deg)}}@keyframes pov-hud{from{box-shadow:0 0 0 rgba(183,245,120,0)}to{box-shadow:0 0 22px rgba(183,245,120,.12)}}`;
-  document.head.appendChild(povImageStyle);
-  const cockpitImage = document.createElement('img');
-  cockpitImage.className = 'pov-cockpit-image';
-  cockpitImage.src = 'pov-cockpit.png';
-  cockpitImage.alt = 'Driver view from inside a single-seater race car on the Melbourne circuit';
-  $('pov-view').prepend(cockpitImage);
-  const duration = 76;
-  let time = 38, playing = false, rate = 1, view = 'circuit', lastFrame = 0;
-  const path = $('circuit'), length = path.getTotalLength();
-  const ns = 'http://www.w3.org/2000/svg';
-  const cars = ['OCO','GAS','ALO'].map(code => {
-    const group = document.createElementNS(ns,'g');
-    group.innerHTML = '<circle class="halo" r="15" fill="none" stroke-width="1.5" opacity=".65"/><circle r="9" fill="#101518"/><circle class="dot" r="5"/><text y="-23" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" font-weight="600">'+code+'</text>';
-    $('markers').append(group); return {code,group};
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js';
+
+const $ = (id) => document.getElementById(id);
+const API_DEFAULT = new URLSearchParams(location.search).get('api') || sessionStorage.getItem('overtiq-endpoint') || 'https://computing-forestry-extraordinary-collapse.trycloudflare.com';
+const state = {
+  apiBase: API_DEFAULT.replace(/\/$/, ''),
+  apiKey: sessionStorage.getItem('overtiq-key') || '',
+  frames: [],
+  zones: [],
+  assessment: null,
+  frameIndex: 0,
+  time: 0,
+  playing: false,
+  rate: 1,
+  view: 'circuit',
+  connected: false,
+  stream: null,
+  lastNow: 0,
+  decision: 'ATTACK'
+};
+
+const demoFrame = {
+  schema: 'OVERTIQ.PhysicsFrame.v1', t: 0,
+  track: { session_key: '2026_11361', s_m: 0, length_m: 5278, x_m: 710, y_m: 290, heading_rad: 1.57, curvature_1_m: 0.0012, sector: 1, zone: 'T1', zone_type: 'Braking' },
+  pose: { x_m: 710, y_m: 290, z_m: 0, yaw_rad: 1.57, pitch_rad: 0, roll_rad: 0 },
+  kinematics: { speed_mps: 78.9, speed_kph: 284, accel_mps2: 0, yaw_rate_radps: 0, steering_rad: 0 },
+  controls: { throttle: .86, brake: .04, gear: 7, drs: false },
+  tires: { compound: 'MEDIUM', age_laps: 18, surface_temp_c: 89, wear: .34 },
+  energy: { ers_fraction: .62, fuel_kg: 42, fuel_lap_delta_kg: -1.72 },
+  flags: { safety_car: false, vsc: false, data_quality: 'demo_fixture' },
+  race: { driver_number: 31, driver_code: 'OCO', lap: 35, position: 14, gap_ahead_s: .558, decision: 'ATTACK' }
+};
+const demoAssessment = {
+  schema: 'EngineerAssessment.v1', driver: { number: 31, code: 'OCO', position: 14 }, decision: 'ATTACK',
+  answers: {
+    can_gain_position_within_3_laps: { probability: .61, confidence: .69, cutoff_lap: 38, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'demo fixture' } },
+    can_pass_within_60s: { probability: .54, confidence: .67, window_s: 60, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'demo fixture' } },
+    durable_pass: { probability: .39, confidence: .62, laps_ahead: 3, evidence: { zone: 'T1', sector: 1, gap_s: .558, speed_kph: 284, tire: 'MEDIUM', tire_age_laps: 18, ers_fraction: .62, simulator: 'demo fixture' } },
+    finish_position: { expected: 13.4, distribution: [12, 12.8, 13.5, 14.2, 15], quantiles: [.1, .25, .5, .75, .9], evidence: { zone: 'T1', sector: 1, simulator: 'demo fixture' } }
+  },
+  recommendation: { action: 'ATTACK', confidence: .69, rationale: 'Demo fixture only — connect the GPU service for live scenario evidence.', override_allowed: true },
+  model: { decision_baseline: 'v4-logistic', forecaster: 'forecaster_2026_v1.pt', simulator: 'demo fixture', device: 'not connected', gpu_ms: null, scenarios: 0 }
+};
+const demoZones = ['T1','T3','T6','T9','T11','T13'].map((zone, i) => ({ zone, sector: Math.floor(i / 2) + 1, type: i % 2 ? 'Overtake' : 'Braking', assessment: demoAssessment.answers, recommendation: demoAssessment.recommendation }));
+
+let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig;
+const trackCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(300, 0, -15), new THREE.Vector3(210, 0, 70), new THREE.Vector3(120, 0, 180), new THREE.Vector3(40, 0, 245),
+  new THREE.Vector3(-100, 0, 220), new THREE.Vector3(-220, 0, 120), new THREE.Vector3(-250, 0, -10),
+  new THREE.Vector3(-180, 0, -150), new THREE.Vector3(-40, 0, -205), new THREE.Vector3(115, 0, -190),
+  new THREE.Vector3(245, 0, -120), new THREE.Vector3(300, 0, -15)
+], true, 'centripetal');
+
+function fmtPct(v) { return v == null ? '—' : Math.round(v * 100) + '%'; }
+function setStatus(label, connected) {
+  $('gpu-state').textContent = label;
+  $('gpu-state').classList.toggle('muted', !connected);
+  $('data-badge').textContent = connected ? 'GPU LINK ACTIVE' : 'GPU LINK PENDING';
+  $('data-badge').classList.toggle('connected', connected);
+  $('frame-status').innerHTML = '<span class="live-dot"></span> ' + (connected ? 'GPU PHYSICS FRAME STREAM' : 'DEMO FIXTURE · CONNECT GPU FOR LIVE DATA');
+  $('footer-status').textContent = connected ? 'RTX 3060 · CUDA · physics + inference remote' : 'Demo fixture · no local physics or inference';
+}
+async function api(path, options = {}) {
+  if (!state.apiBase) throw new Error('No GPU endpoint configured');
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (state.apiKey) headers['x-overtiq-key'] = state.apiKey;
+  const response = await fetch(state.apiBase + path, { ...options, headers });
+  if (!response.ok) throw new Error('GPU service returned ' + response.status);
+  return response.json();
+}
+function useDemo() {
+  state.frames = Array.from({ length: 241 }, (_, i) => ({ ...demoFrame, t: i * .25, track: { ...demoFrame.track, s_m: (i * 78.9 * .25) % 5278 }, race: { ...demoFrame.race, gap_ahead_s: .558 } }));
+  state.zones = demoZones;
+  state.assessment = demoAssessment;
+  state.connected = false;
+  setStatus('DEMO FIXTURE', false);
+  renderAssessment();
+  renderZones();
+  renderFrame();
+}
+async function connectGpu() {
+  const endpoint = $('api-endpoint').value.trim().replace(/\/$/, '');
+  const key = $('api-key').value.trim();
+  if (!endpoint) { $('data-note').textContent = 'Add the remote HTTPS endpoint to connect.'; return; }
+  state.apiBase = endpoint; state.apiKey = key;
+  $('connect-submit').textContent = 'CONNECTING…';
+  try {
+    const health = await api('/health');
+    if (!health.gpu?.available) throw new Error('Remote service has no CUDA device');
+    const [frames, assessment, zones] = await Promise.all([
+      api('/replays/2026_11361/frames?limit=240'),
+      api('/engineer/assess', { method: 'POST', body: JSON.stringify({ request: { session_key: '2026_11361', driver_number: 31, driver_code: 'OCO', lap: 35, position: 14, gap_ahead_s: .558, speed_mps: 78.9, decision: state.decision, horizon_s: 60, n_scenarios: 256 }, include_frames: false }) }),
+      api('/replays/2026_11361/zones')
+    ]);
+    state.frames = frames.frames || []; state.assessment = assessment; state.zones = zones.zones || []; state.connected = true;
+    sessionStorage.setItem('overtiq-endpoint', state.apiBase); sessionStorage.setItem('overtiq-key', state.apiKey);
+    setStatus(health.gpu.device || 'RTX 3060', true);
+    $('data-note').textContent = 'GPU physics + calibrated inference · ' + (health.model || 'model loaded');
+    $('connection-panel').hidden = true; renderAssessment(); renderZones(); renderFrame();
+  } catch (error) {
+    state.connected = false; setStatus('LINK ERROR', false);
+    $('data-note').textContent = error.message + ' · demo fixture remains active';
+    useDemo();
+  } finally { $('connect-submit').textContent = 'TEST & CONNECT'; }
+}
+function renderFrame() {
+  const frame = state.frames[state.frameIndex] || demoFrame;
+  const k = frame.kinematics || demoFrame.kinematics, race = frame.race || demoFrame.race, track = frame.track || demoFrame.track;
+  const vsc = Boolean(frame.flags?.vsc || frame.flags?.safety_car);
+  $('hud-driver').textContent = (race.driver_code || 'OCO') + ' · ' + (race.driver_number || 31);
+  $('hud-speed').textContent = Math.round((k.speed_kph ?? k.speed_mps * 3.6)) + ' KM/H';
+  $('hud-gear').textContent = String(frame.controls?.gear ?? 7);
+  $('hud-lap').textContent = (race.lap ?? 35) + ' / 58';
+  $('lap').textContent = race.lap ?? 35;
+  $('speed').innerHTML = Math.round((k.speed_kph ?? k.speed_mps * 3.6)) + ' <small>km/h</small>';
+  $('position').textContent = 'P' + (race.position ?? 14);
+  $('tyre-age').textContent = Math.round(frame.tires?.age_laps ?? 18) + ' laps';
+  $('race-state').textContent = vsc ? 'VIRTUAL SAFETY CAR' : 'GREEN FLAG';
+  $('race-state').classList.toggle('vsc', vsc);
+  $('map-status').textContent = vsc ? 'VSC IN PROGRESS' : 'TRACK CLEAR · GPU FRAME ' + (state.frameIndex + 1);
+  $('time-label').innerHTML = new Date((state.time || 0) * 1000).toISOString().slice(14, 19) + ' <span>/ 01:00</span>';
+  $('timeline').value = state.time;
+  $('timeline').style.background = 'linear-gradient(to right,#b7f578 ' + (state.time / 60 * 100) + '%,#303b3d ' + (state.time / 60 * 100) + '%)';
+  renderThree(frame);
+}
+function renderAssessment() {
+  const a = state.assessment || demoAssessment, answers = a.answers || demoAssessment.answers;
+  [['gain','can_gain_position_within_3_laps'],['pass','can_pass_within_60s'],['durable','durable_pass']].forEach(([id, key]) => {
+    const item = answers[key] || {}; const pct = fmtPct(item.probability);
+    $('answer-' + id).textContent = pct; $('bar-' + id).style.width = (item.probability || 0) * 100 + '%';
+    const e = item.evidence || {}; $('evidence-' + id).textContent = [e.zone || 'active zone', e.gap_s != null ? e.gap_s.toFixed(2) + 's gap' : '', e.speed_kph ? Math.round(e.speed_kph) + ' km/h' : '', e.simulator || ''].filter(Boolean).join(' · ');
   });
-  const clamp = n => Math.max(0,Math.min(duration,n));
-  const gapAt = t => Math.max(.12, .77 + .35*Math.sin((t-38)*.19) -.212*Math.cos((t-38)*.075));
-  function setTime(t) {time=clamp(t);render();}
-  function playToggle(){if(time>=duration)time=0;playing=!playing;render();}
-  function render(){
-    const vsc=time>=15.2 && time<30.4;
-    const gap=gapAt(time);
-    $('lap').textContent=Math.min(40,30+Math.floor(time/duration*10));
-    $('race-state').textContent=vsc?'VIRTUAL SAFETY CAR':'GREEN FLAG';
-    $('race-state').classList.toggle('vsc',vsc);
-    $('map-status').textContent=vsc?'VSC IN PROGRESS':'TRACK CLEAR';
-    $('driver-number').textContent='31';
-    $('driver-name').innerHTML='Esteban<br>Ocon';
-    $('position').textContent='P14';
-    $('ahead-name').textContent='10 · GASLY';
-    const speed=Math.round((vsc?115:205)+(vsc?28:83)*Math.sin(time*.79)**2);
-    $('speed').innerHTML=speed+' <small>km/h</small>';
-    $('pov-speed').innerHTML=speed+' <em>KM/H</em>';
-    $('pov-gear').textContent=speed>250?'7':speed>205?'6':speed>160?'5':'4';
-    $('pov-lap').innerHTML=`${Math.min(40,30+Math.floor(time/duration*10))} <em>/ 58</em>`;
-    $('gap').textContent=gap.toFixed(3);
-    $('gap-fill').style.width=Math.min(100,gap/2*100)+'%';
-    const active=gap<1&&!vsc;
-    $('gap-fill').style.background=active?'var(--lime)':'#f1c75e';
-    $('gate-state').textContent=vsc?'DETECTION SUSPENDED':active?'WITHIN DETECTION':'OUTSIDE DETECTION';
-    $('gate-detail').textContent=vsc?'Virtual safety car is active':active?'Gap under the 1.0 s threshold':'Gap above the 1.0 s threshold';
-    $('gate-icon').textContent=active?'◎':'◌';
-    $('timeline').value=time;
-    $('timeline').style.background=`linear-gradient(to right,#b7f578 ${time/duration*100}%,#303b3d ${time/duration*100}%)`;
-    $('time-label').innerHTML=`${String(Math.floor(time/60)).padStart(2,'0')}:${String(Math.floor(time%60)).padStart(2,'0')} <span>/ 01:16</span>`;
-    $('play').textContent=playing?'Ⅱ':'▶';
-    $('play').setAttribute('aria-label',playing?'Pause replay':'Play replay');
-    const base=.02+(time-38)*.132;
-    const offsets={OCO:0,GAS:gapAt(time)/80,ALO:-gapAt(time)/80};
-    for(const car of cars){
-      const p=path.getPointAtLength(((base+offsets[car.code])%1+1)%1*length);
-      const selected=car.code==='OCO';
-      const ahead=car.code==='GAS';
-      const color=selected?'#b7f578':ahead?'#f479a2':'#e3e8ea';
-      car.group.setAttribute('transform',`translate(${p.x} ${p.y})`);
-      car.group.querySelector('.dot').setAttribute('fill',color);
-      car.group.querySelector('.halo').setAttribute('stroke',color);
-      car.group.querySelector('.halo').setAttribute('r',selected?'17':'12');
-      const label=car.group.querySelector('text');label.setAttribute('fill',color);
-      label.textContent=car.code==='ALO'?'AL0':car.code;
-      label.setAttribute('y',car.code==='OCO'?'-25':car.code==='GAS'?'30':'-42');
-    }
-    document.querySelector('.map-wrap').classList.toggle('pov-mode',view==='pov');
-    $('map').setAttribute('aria-hidden',view==='pov'?'true':'false');
-    $('pov-view').setAttribute('aria-hidden',view==='pov'?'false':'true');
-    $('view-label').textContent=view==='pov'?'DRIVER POV':'CIRCUIT VIEW';
-    $('circuit-view').classList.toggle('active',view==='circuit');
-    $('pov-view-button').classList.toggle('active',view==='pov');
-    $('spark-cursor').setAttribute('x1',time/duration*300);$('spark-cursor').setAttribute('x2',time/duration*300);
+  const finish = answers.finish_position || {}; $('finish-expected').textContent = finish.expected == null ? '—' : 'P' + Number(finish.expected).toFixed(1);
+  $('finish-note').textContent = a.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'GPU scenario distribution';
+  const vals = finish.distribution || [];
+  $('finish-bars').innerHTML = vals.map((value, i) => '<div class="finish-bar"><span>P' + Number(value).toFixed(0) + '</span><i style="width:' + Math.max(12, 100 - i * 15) + '%"></i></div>').join('');
+  $('assessment-time').textContent = a.model?.gpu_ms != null ? Math.round(a.model.gpu_ms) + ' ms GPU' : 'DEMO FIXTURE';
+}
+function renderZones() {
+  const rows = state.zones || [];
+  $('zone-rows').innerHTML = rows.length ? rows.map(z => {
+    const a = z.assessment || {}; const pass = a.can_pass_within_60s?.probability ?? 0; const durable = a.durable_pass?.probability ?? 0;
+    const action = z.recommendation?.action || 'HOLD';
+    return '<tr><td><b>' + z.zone + '</b></td><td>S' + z.sector + '</td><td><span class="zone-type ' + String(z.type || '').toLowerCase() + '">' + (z.type || 'ZONE') + '</span></td><td class="probability">' + fmtPct(pass) + '</td><td class="probability">' + fmtPct(durable) + '</td><td><strong class="action-' + action.toLowerCase() + '">' + action + '</strong></td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty-row">No zones returned by the GPU service.</td></tr>';
+}
+function initThree() {
+  const trackCanvas = $('track-canvas'), povCanvas = $('pov-canvas');
+  trackRenderer = new THREE.WebGLRenderer({ canvas: trackCanvas, antialias: true, alpha: true });
+  povRenderer = new THREE.WebGLRenderer({ canvas: povCanvas, antialias: true, alpha: false });
+  [trackRenderer, povRenderer].forEach(r => { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6)); r.outputColorSpace = THREE.SRGBColorSpace; });
+  trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
+  trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.lookAt(0, 0, 0);
+  const road = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 160, 17, 8, true), new THREE.MeshBasicMaterial({ color: '#202b30' }));
+  const line = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 160, 1.5, 5, true), new THREE.MeshBasicMaterial({ color: '#667879' }));
+  trackScene.add(road, line, new THREE.AmbientLight('#ffffff', 1));
+  carMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), new THREE.MeshBasicMaterial({ color: '#b7f578' }));
+  oppMesh = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 12), new THREE.MeshBasicMaterial({ color: '#f479a2' }));
+  trackScene.add(carMesh, oppMesh);
+  povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
+  povCamera = new THREE.PerspectiveCamera(70, 1, .1, 2000); povCamera.position.set(0, 18, 28); povCamera.rotation.x = -.08;
+  povRig = new THREE.Group(); povScene.add(povRig);
+  const roadPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 1800), new THREE.MeshBasicMaterial({ color: '#141a1d' })); roadPlane.rotation.x = -Math.PI / 2; roadPlane.position.z = -700; povRig.add(roadPlane);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(2, 8, 1500), new THREE.MeshBasicMaterial({ color: '#76817e' })); rail.position.set(side * 21, 4, -700); povRig.add(rail);
+    for (let i = 0; i < 28; i++) { const kerb = new THREE.Mesh(new THREE.BoxGeometry(4, .28, 18), new THREE.MeshBasicMaterial({ color: i % 2 ? '#cf6170' : '#eef0dc' })); kerb.position.set(side * 19, .3, -i * 47 - 35); povRig.add(kerb); }
   }
-  function updateSpark(){let d='';for(let i=0;i<=152;i++){const x=i/152*300,y=64-gapAt(i/2)/2*64;d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2);} $('spark-path').setAttribute('d',d);}
-  $('play').addEventListener('click',playToggle);
-  $('reset').addEventListener('click',()=>{playing=false;setTime(0);});
-  $('back').addEventListener('click',()=>setTime(time-5));
-  $('forward').addEventListener('click',()=>setTime(time+5));
-  $('jump').addEventListener('click',()=>setTime(15.2));
-  $('timeline').addEventListener('input',e=>setTime(Number(e.target.value)));
-  $('rate').addEventListener('change',e=>{rate=Number(e.target.value);});
-  $('circuit-view').addEventListener('click',()=>{view='circuit';render();});
-  $('pov-view-button').addEventListener('click',()=>{view='pov';render();});
-  $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{$('fullscreen').title='Full screen is unavailable in this browser';}});
-  document.addEventListener('keydown',e=>{if(/INPUT|SELECT|BUTTON|TEXTAREA/.test(e.target.tagName)||e.altKey||e.ctrlKey||e.metaKey)return;if(e.code==='Space'){e.preventDefault();playToggle();}if(e.code==='ArrowLeft'){e.preventDefault();setTime(time-5);}if(e.code==='ArrowRight'){e.preventDefault();setTime(time+5);}});
-  function frame(now){const delta=lastFrame?Math.min((now-lastFrame)/1000,.1):0;lastFrame=now;if(playing){time=clamp(time+delta*rate);if(time>=duration)playing=false;render();}requestAnimationFrame(frame);}
-  updateSpark();render();requestAnimationFrame(frame);
-  const context=document.modelContext;
-  if(context?.registerTool){
-    const lifecycle=new AbortController();
-    window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
-    try{Promise.resolve(context.registerTool({
-      name:'configure_race_replay',title:'Configure race replay',
-      description:'Seek the simulated Esteban Ocon race replay and set playback state.',
-      inputSchema:{type:'object',properties:{seconds:{type:'number',minimum:0,maximum:76},playing:{type:'boolean'}},required:['seconds','playing'],additionalProperties:false},
-      annotations:{readOnlyHint:false,untrustedContentHint:false},
-      execute(input){
-        if(!input||typeof input.seconds!=='number'||!Number.isFinite(input.seconds)||input.seconds<0||input.seconds>76||typeof input.playing!=='boolean'||Object.keys(input).some(k=>!['seconds','playing'].includes(k)))throw new Error('Expected seconds from 0 to 76 and a boolean playing.');
-        playing=input.playing;time=input.seconds;updateSpark();render();
-        return {seconds:time,driver:'OCO',playing,gap:gapAt(time),simulated:true};
-      }
-    },{signal:lifecycle.signal})).catch(()=>{});}catch{}
-  }
-})();
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(14, 1.7, 8, 40, Math.PI), new THREE.MeshBasicMaterial({ color: '#080b0d' })); halo.rotation.z = Math.PI; halo.position.set(0, 14, 2); povRig.add(halo);
+  wheelMesh = new THREE.Group(); wheelMesh.position.set(0, -1, 18); povRig.add(wheelMesh);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(9, 2, 8, 24), new THREE.MeshBasicMaterial({ color: '#060809' })); wheel.scale.set(1.2, .75, .6); wheelMesh.add(wheel);
+  for (let i = 0; i < 3; i++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(1.2, 11, 1), new THREE.MeshBasicMaterial({ color: '#788486' })); spoke.rotation.z = i * Math.PI / 3; wheelMesh.add(spoke); }
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(38, 4, 11), new THREE.MeshBasicMaterial({ color: '#0a0e10' })); dash.position.set(0, 5, 13); povRig.add(dash);
+  povScene.add(new THREE.HemisphereLight('#bfd7e6', '#101719', 1.2));
+  resizeThree(); window.addEventListener('resize', resizeThree);
+}
+function resizeThree() {
+  const box = $('visual-wrap').getBoundingClientRect(), w = Math.max(320, box.width), h = Math.max(280, box.height - 2);
+  trackRenderer?.setSize(w, h, false); povRenderer?.setSize(w, h, false);
+  if (povCamera) { povCamera.aspect = w / h; povCamera.updateProjectionMatrix(); }
+}
+function renderThree(frame) {
+  if (!trackRenderer || !frame) return;
+  const s = (frame.track?.s_m || 0) / (frame.track?.length_m || 5278), gap = frame.race?.gap_ahead_s || .5;
+  const p = trackCurve.getPointAt((s % 1 + 1) % 1), op = trackCurve.getPointAt((s + Math.min(.08, gap / 80)) % 1);
+  carMesh.position.copy(p); carMesh.position.y = 12; oppMesh.position.copy(op); oppMesh.position.y = 10;
+  const steer = frame.kinematics?.steering_rad || 0, speed = frame.kinematics?.speed_mps || 78;
+  wheelMesh.rotation.z = -steer * .7; povRig.rotation.z = (frame.pose?.roll_rad || 0) * .65; povRig.rotation.x = (frame.pose?.pitch_rad || 0) * .5;
+  povCamera.position.y = 18 + Math.min(.8, Math.abs(frame.kinematics?.yaw_rate_radps || 0) * 3);
+  trackRenderer.render(trackScene, trackCamera); povRenderer.render(povScene, povCamera);
+}
+function setView(view) {
+  state.view = view; $('visual-wrap').classList.toggle('pov-mode', view === 'pov'); $('view-label').textContent = view === 'pov' ? 'DRIVER POV' : 'CIRCUIT VIEW';
+  $('circuit-view').classList.toggle('active', view === 'circuit'); $('pov-view-button').classList.toggle('active', view === 'pov'); resizeThree(); renderFrame();
+}
+function seek(seconds) { state.time = Math.max(0, Math.min(60, seconds)); state.frameIndex = state.frames.length ? Math.min(state.frames.length - 1, Math.round(state.time / .25)) : 0; renderFrame(); }
+function playToggle() { state.playing = !state.playing; $('play').textContent = state.playing ? 'Ⅱ' : '▶'; }
+function startStream() {
+  if (!state.connected || !state.apiBase) { $('data-note').textContent = 'Connect the authenticated GPU endpoint before starting live stream.'; return; }
+  if (state.stream) { state.stream.close(); state.stream = null; $('live-stream').classList.remove('active'); return; }
+  const wsUrl = state.apiBase.replace(/^http/, 'ws') + '/streams/2026_11361' + (state.apiKey ? '?key=' + encodeURIComponent(state.apiKey) : '');
+  state.stream = new WebSocket(wsUrl); $('live-stream').classList.add('active'); $('live-stream').textContent = 'STOP STREAM';
+  state.stream.onmessage = event => { const frame = JSON.parse(event.data); state.frames.push(frame); state.frameIndex = state.frames.length - 1; state.time = frame.t || state.time; renderFrame(); };
+  state.stream.onclose = () => { state.stream = null; $('live-stream').classList.remove('active'); $('live-stream').innerHTML = 'LIVE STREAM <span>↗</span>'; };
+}
+function tick(now) {
+  const dt = state.lastNow ? Math.min(.1, (now - state.lastNow) / 1000) : 0; state.lastNow = now;
+  if (state.playing) { seek(state.time + dt * state.rate); if (state.time >= 60) { state.playing = false; $('play').textContent = '▶'; } }
+  requestAnimationFrame(tick);
+}
+
+$('connect').addEventListener('click', () => { $('connection-panel').hidden = !$('connection-panel').hidden; $('api-endpoint').value = state.apiBase; $('api-key').value = state.apiKey; });
+$('connect-submit').addEventListener('click', connectGpu);
+$('circuit-view').addEventListener('click', () => setView('circuit'));
+$('pov-view-button').addEventListener('click', () => setView('pov'));
+$('play').addEventListener('click', playToggle);
+$('reset').addEventListener('click', () => { state.playing = false; seek(0); });
+$('back').addEventListener('click', () => seek(state.time - 5));
+$('forward').addEventListener('click', () => seek(state.time + 5));
+$('timeline').addEventListener('input', e => seek(Number(e.target.value)));
+$('rate').addEventListener('change', e => { state.rate = Number(e.target.value); });
+$('live-stream').addEventListener('click', startStream);
+$('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch {} });
+document.querySelectorAll('[data-decision]').forEach(button => button.addEventListener('click', async () => {
+  state.decision = button.dataset.decision; document.querySelectorAll('[data-decision]').forEach(b => b.classList.toggle('active', b === button));
+  if (!state.connected) { demoAssessment.recommendation = { ...demoAssessment.recommendation, action: state.decision, rationale: 'Connect the GPU service for live scenario evidence.' }; state.assessment = demoAssessment; renderAssessment(); return; }
+  button.textContent = '…';
+  try { state.assessment = await api('/engineer/assess', { method: 'POST', body: JSON.stringify({ request: { session_key: '2026_11361', driver_number: 31, driver_code: 'OCO', lap: 35, position: 14, gap_ahead_s: .558, speed_mps: 78.9, decision: state.decision, horizon_s: 60, n_scenarios: 256 }, include_frames: false }) }); renderAssessment(); }
+  catch (error) { $('data-note').textContent = error.message; }
+  finally { button.textContent = state.decision; }
+}));
+document.addEventListener('keydown', e => { if (/INPUT|SELECT|BUTTON|TEXTAREA/.test(e.target.tagName) || e.altKey || e.ctrlKey || e.metaKey) return; if (e.code === 'Space') { e.preventDefault(); playToggle(); } if (e.code === 'ArrowLeft') seek(state.time - 5); if (e.code === 'ArrowRight') seek(state.time + 5); });
+const context = document.modelContext;
+if (context?.registerTool) { try { context.registerTool({ name: 'configure_race_replay', title: 'Configure GPU race replay', description: 'Seek the remote GPU Overtiq replay and set playback state.', inputSchema: { type: 'object', properties: { seconds: { type: 'number', minimum: 0, maximum: 60 }, playing: { type: 'boolean' } }, required: ['seconds', 'playing'], additionalProperties: false }, execute(input) { seek(input.seconds); state.playing = input.playing; return { seconds: state.time, driver: 'OCO', playing: state.playing, gpuBacked: state.connected }; } }); } catch {} }
+
+initThree(); useDemo(); requestAnimationFrame(tick);
+if (state.apiBase) { $('api-endpoint').value = state.apiBase; connectGpu(); }
+

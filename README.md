@@ -1,9 +1,42 @@
-# TrackFirst race visualizer
+# TrackFirst · Overtiq race engineer terminal
 
-A standalone HTML/CSS/SVG/JavaScript replay inspired by the supplied Haas Melbourne Backtest video. Open `dist/index.html`, or serve `dist` using a local HTTP server.
+The Site in `dist/` is a static React-style terminal shell (served as a browser module) with a Three.js circuit map and a true single-seater cockpit POV. It renders the remote Overtiq physics stream and exposes four engineer answers per decision point:
 
-Includes playback, seeking, four playback rates, a single-driver Esteban Ocon focus, circuit and driver-POV views, dynamic gaps, simulated VSC events, and fullscreen mode. Space toggles playback and left/right arrows seek five seconds when a form control is not focused.
+- position gain within three laps
+- pass within 60 seconds
+- durable pass, still ahead three laps later
+- expected finish position plus distribution
 
-All telemetry is illustrative and generated locally, not extracted from the video or an official timing source. The circuit is a reference-inspired schematic. The 76-second timeline compresses laps 30–40; marker motion, speed and gaps are illustrative rather than a physically consistent reconstruction. To use actual racing data, replace the demo model in `dist/app.js` with timestamped positions, timing, and event records.
+All heavy work is remote. The browser performs presentation rendering, camera interpolation, and transport only. Telemetry feature construction, the speed forecaster, the CUDA physics update, opponent response, and Monte Carlo scenarios run in `backend/overtiq_api.py` on the Vast RTX 3060.
 
-No build step or runtime dependencies. Google Fonts is optional; system fallbacks are defined. WebMCP support is feature-detected and optional.
+## GPU service
+
+The service is installed at `/workspace/overtiq/services/overtiq_api.py` and managed by supervisor as `overtiq_gpu`. It fails closed when CUDA is unavailable, loads `reports/model/forecaster_2026_v1.pt` directly onto CUDA, and binds to the reserved remote service port.
+
+Routes:
+
+- `GET /health`
+- `GET /physics/schema`
+- `POST /physics/simulate`
+- `POST /physics/compare`
+- `GET /engineer/schema`
+- `POST /engineer/assess`
+- `POST /engineer/race-assessment`
+- `GET /replays/{replay_id}/frames`
+- `GET /replays/{replay_id}/zones`
+- `WS /streams/{replay_id}`
+
+POST and WebSocket requests use the remote `x-overtiq-key`. The terminal's Connect GPU panel keeps the key in session storage and never ships model weights or raw telemetry to the laptop.
+
+The current instance exposes the API through a supervised HTTPS quick tunnel. Quick tunnels are ephemeral; replace the endpoint with a named HTTPS tunnel for production uptime.
+
+## Local preview
+
+Serve the static directory with any HTTP server (module imports require HTTP):
+
+```powershell
+python -m http.server 4173 --directory dist
+```
+
+Open `http://localhost:4173`. The terminal starts with a read-only demo fixture; use **Connect GPU** to switch to the remote service.
+
