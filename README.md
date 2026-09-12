@@ -26,30 +26,21 @@ Routes:
 - `GET /replays/{replay_id}/frames`
 - `GET /replays/{replay_id}/zones`
 - `GET /tracks` (track catalog, lap counts, lengths, and stable IDs)
-- `WS /streams/{replay_id}`
+- `GET /streams/{replay_id}/events` (long-lived NDJSON frame stream)
+- `WS /streams/{replay_id}` (compatibility route)
 
-POST and WebSocket requests use the remote `x-overtiq-key`. The terminal auto-connects, sends one cached bootstrap request, and opens one live stream. Scenario controls (weather, rain, compound, ERS, fuel, VSC, and red flag) are forwarded to CUDA; the before/after panel shows how the four engineer outputs move. The browser receives compact frames only and never receives model weights or raw telemetry.
+POST requests use the remote `x-overtiq-key`; the browser stream authenticates when it opens. The terminal auto-connects, sends one cached bootstrap request, and opens one long-lived HTTP stream. Scenario controls (weather, rain, compound, ERS, fuel, VSC, and red flag) are forwarded to CUDA; the before/after panel shows how the four engineer outputs move. The browser receives compact frames only and never receives model weights or raw telemetry.
 
 The decision baseline is the calibrated `v4-logistic` model. The GPU forecaster artifact (`forecaster_2026_v1.pt`) consumes 26 telemetry features and returns 1–5 second speed forecasts. The CUDA simulator uses those inputs with vehicle state, grip, energy, fuel, opponent response, and Monte Carlo branches to return probabilities, finish-position quantiles, evidence, and a recommendation.
 
 The accuracy and value scorecard is documented in [docs/model-evaluation.md](docs/model-evaluation.md). It defines grouped time-forward splits, pass and durable-pass labels, calibration and ranking metrics, physics fidelity checks, promotion gates, and the retrospective, shadow-mode, and prospective tests needed to prove race value.
 
-The current workflow is localhost-only. The browser talks to `http://127.0.0.1:10200`, which is an SSH forward to the GPU service; no Site deployment or public tunnel is required.
+FastAPI serves both the frontend and GPU API through Vast's direct container `10200` to host `41138` mapping. The browser therefore uses relative same-origin URLs, with no CORS hop, localhost bridge, or SSH tunnel.
 
-## Local preview
+## Open the terminal
 
-Serve the static directory with any HTTP server (module imports require HTTP):
+Open the supervisor-managed terminal directly:
 
-```powershell
-python -m http.server 4173 --directory dist
-```
+`http://122.59.250.166:41138/`
 
-Open `http://localhost:4173`. The terminal auto-connects to the remote GPU service and shows an explicit unavailable state when the link is down; it does not fabricate replay frames.
-
-For the localhost workflow, forward the GPU API over SSH and keep the terminal on loopback:
-
-```powershell
-ssh -i "C:\Users\Windows 10\.ssh\id_ed25519_vast" -p 41103 -L 10200:127.0.0.1:10200 root@122.59.250.166
-```
-
-The local build uses `http://127.0.0.1:10200` automatically and does not load synthetic demo values while connecting.
+`start_local.ps1` checks the remote GPU health and opens this URL. It does not start a tunnel or local server. The app shows an explicit unavailable state if the GPU process is down; it does not fabricate replay frames.

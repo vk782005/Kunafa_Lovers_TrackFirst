@@ -15,19 +15,23 @@ import threading
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Literal
 
 import torch
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 
 DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else None
 API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
-SERVICE_VERSION = "overtiq-gpu-0.2.0"
+SERVICE_VERSION = "overtiq-gpu-0.3.0"
+FRONTEND_DIR = Path(os.getenv("OVERTIQ_FRONTEND_DIR", "/workspace/overtiq/frontend"))
+PRECOMPUTED_DIR = Path(os.getenv("OVERTIQ_PRECOMPUTED_DIR", "/workspace/overtiq/precomputed"))
 
 # Stable track identifiers shared by the engineer terminal and remote API.
 # Geometry is resolved by the simulator; this catalog gives the UI and API a
@@ -508,18 +512,25 @@ def engineer_assess(body: AssessmentRequest) -> dict[str, Any]:
 
 @app.post("/engineer/bootstrap", dependencies=[Depends(authenticated)])
 def engineer_bootstrap(body: AssessmentRequest) -> dict[str, Any]:
-    """Single-request initial payload for the terminal.
-
-    This prevents page load fan-out: one GPU assessment, one frame window, and
-    the compact zone table arrive together. The browser caches this payload
-    for the session and does not poll on a timer.
-    """
+    """Serve the immutable baseline artifact; calculate it only once per track."""
     request = body.request
+    baseline_path = PRECOMPUTED_DIR / f"baseline_{request.track_id.upper()}.json"
+    if baseline_path.is_file():
+        payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+        payload["served_from"] = "precomputed"
+        return payload
+
     assessment = assess(request, include_frames=False)
     frames, _ = simulate_gpu(request, include_frames=True)
-    return {"schema": "EngineerBootstrap.v1", "gpu": {"available": True, "device": torch.cuda.get_device_name(0),
+    payload = {"schema": "EngineerBootstrap.v1", "gpu": {"available": True, "device": torch.cuda.get_device_name(0),
             "model": FORECASTER.version}, "assessment": assessment, "frames": frames,
-            "zones": zone_rows_from_assessment(assessment), "request_count": 1}
+            "zones": zone_rows_from_assessment(assessment), "request_count": 0,
+            "served_from": "precomputed"}
+    PRECOMPUTED_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = baseline_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    temporary.replace(baseline_path)
+    return payload
 
 
 @app.post("/engineer/race-assessment", dependencies=[Depends(authenticated)])
@@ -631,6 +642,12 @@ async def stream_events(replay_id: str, key: str | None = None, weather: str | N
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Accel-Buffering": "no",
     })
+
+
+# Keep this mount last so every API and streaming route above wins route
+# matching. The browser and GPU API then share one Vast-mapped origin.
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="race-engineer-terminal")
 
 
 if __name__ == "__main__":

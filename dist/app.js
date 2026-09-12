@@ -2,9 +2,10 @@ import * as THREE from './three.module.js';
 import { DEFAULT_TRACK_ID, formatTrackLength, getTrack, trackOptions } from './track-data.js';
 
 const $ = (id) => document.getElementById(id);
-const LOCAL_GPU_ENDPOINT = 'http://127.0.0.1:10200';
-const LOCAL_HOST = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const API_DEFAULT = new URLSearchParams(location.search).get('api') || (LOCAL_HOST ? LOCAL_GPU_ENDPOINT : (sessionStorage.getItem('overtiq-endpoint') || LOCAL_GPU_ENDPOINT));
+// The race terminal and GPU API are served by the same FastAPI origin. A
+// query override remains available for development, but production never
+// depends on a localhost bridge or an SSH process.
+const API_DEFAULT = new URLSearchParams(location.search).get('api') || location.origin;
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const SNAPSHOT_KEY = 'overtiq-gpu-snapshot-v1';
 const TRACK_PREF_KEY = 'overtiq-track-id-v1';
@@ -35,7 +36,7 @@ const state = {
   beforeAssessment: null,
   beforeControls: null,
   scenarioKey: '',
-  streamWanted: true,
+  streamWanted: false,
   streamTimer: null,
   streamAttempt: 0,
   connectTimer: null,
@@ -57,7 +58,7 @@ function setStatus(label, connected) {
   $('gpu-state').textContent = label;
   $('gpu-state').classList.toggle('muted', !connected);
   const text = String(label || '').toUpperCase();
-  $('data-badge').textContent = connected ? 'GPU LINK ACTIVE' : (text.includes('ERROR') ? 'GPU LINK ERROR' : text.includes('RECONNECT') ? 'GPU LINK RECONNECTING' : 'GPU LINK PENDING');
+  $('data-badge').textContent = connected ? 'GPU READY' : (text.includes('ERROR') ? 'GPU ERROR' : text.includes('RECONNECT') ? 'GPU RECONNECTING' : 'GPU PENDING');
   $('data-badge').classList.toggle('connected', connected);
   $('frame-status').innerHTML = '<span class="live-dot"></span> ' + (connected ? 'GPU PHYSICS FRAME STREAM' : 'GPU LINK DEGRADED · NO LIVE FRAME');
   $('footer-status').textContent = connected ? 'RTX 3060 · CUDA · physics + inference remote' : 'REMOTE GPU DATA UNAVAILABLE';
@@ -156,19 +157,22 @@ function scheduleConnect() {
 }
 async function connectGpu(force = false) {
   if (state.connectPromise || (state.connected && !force)) return state.connectPromise;
-  $('gpu-state').textContent = 'COMPUTING'; $('data-badge').textContent = 'GPU COMPUTING';
+  $('gpu-state').textContent = 'LOADING'; $('data-badge').textContent = 'LOADING BASELINE';
   state.connectPromise = (async () => {
     try {
       const bootstrap = await api('/engineer/bootstrap', { method: 'POST', body: JSON.stringify({ request: requestPayload(), include_frames: true }) });
-      state.frames = bootstrap.frames || []; state.beforeFrames = (bootstrap.frames || []).slice(); state.assessment = bootstrap.assessment; state.zones = bootstrap.zones || []; state.zoneLoaded = true; state.connected = true; state.requestCount = bootstrap.request_count || 1;
+      state.frames = bootstrap.frames || []; state.beforeFrames = (bootstrap.frames || []).slice(); state.assessment = bootstrap.assessment; state.zones = bootstrap.zones || []; state.zoneLoaded = true; state.connected = true; state.requestCount = bootstrap.request_count ?? 0;
       state.beforeAssessment = bootstrap.assessment; state.beforeControls = { ...state.controls }; state.scenarioKey = scenarioKey();
       state.assessmentCache.set(state.scenarioKey, { assessment: bootstrap.assessment, frames: bootstrap.frames || [] });
       state.connectAttempt = 0; state.snapshotRestored = false; saveSnapshot();
       sessionStorage.setItem('overtiq-endpoint', state.apiBase); sessionStorage.setItem('overtiq-key', state.apiKey);
-      setStatus(bootstrap.gpu?.device || 'RTX 3060', true);
-      $('compute-sim').textContent = 'RTX 3060 · CUDA';
-      $('data-note').textContent = 'Race engineer decision workspace · ' + (bootstrap.gpu?.model || 'model loaded');
-      $('compute-requests').textContent = state.requestCount + ' BOOTSTRAP'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE'; renderAssessment(); renderComparison(); renderZones(); renderFrame(); startStream(true);
+      setStatus('READY', true);
+      $('compute-sim').textContent = 'RTX 3060 · READY'; $('compute-physics').textContent = 'BASELINE LOADED'; $('compute-model').textContent = bootstrap.gpu?.model || 'MODEL READY';
+      $('compute-latency').textContent = 'PRECOMPUTED'; $('compute-telemetry').textContent = state.frames.length + ' BASELINE FRAMES';
+      $('data-note').textContent = 'Precomputed race baseline loaded · GPU ready for an adjusted scenario';
+      $('compute-requests').textContent = '0 LIVE RUNS'; $('sim-state').innerHTML = '<i class="live-dot"></i> BASELINE READY · GPU IDLE';
+      $('live-stream').textContent = 'BASELINE LOADED'; $('live-stream').disabled = true;
+      renderAssessment(); renderComparison(); renderZones(); renderFrame();
     } catch (error) {
       const retained = Boolean(state.assessment && state.frames.length);
       state.connected = false;
@@ -488,58 +492,53 @@ function startStream(force = false) {
   }
   state.streamWanted = true; state.httpAbort?.abort(); state.httpAbort = null; state.stream?.close(); state.stream = null;
   const params = new URLSearchParams({ key: state.apiKey || '', track_id: currentTrack.id, track_length_m: String(currentTrack.lengthM), weather: state.controls.weather, tire_compound: state.controls.tire_compound, rain_intensity: String(state.controls.rain_intensity), ers_fraction: String(state.controls.ers_fraction), fuel_kg: String(state.controls.fuel_kg), vsc: String(state.controls.vsc), red_flag: String(state.controls.red_flag), decision: state.decision });
-  // Use the native WebSocket route for the live channel. REST bootstrap remains
-  // the single initial request; WebSocket avoids fetch stream buffering and
-  // gives us explicit open/close/error lifecycle events for reconnects.
-  const wsBase = state.apiBase.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
-  const socket = new WebSocket(wsBase + '/streams/2026_11361?' + params.toString());
-  state.stream = socket;
+  // Use the newline-delimited HTTP stream for the live channel. It works
+  // through local proxies and browser privacy layers that leave WebSocket
+  // handshakes stuck in CONNECTING, while keeping one GPU scenario per stream.
+  const controller = new AbortController(); state.httpAbort = controller;
   $('live-stream').classList.add('active'); $('live-stream').textContent = 'STOP STREAM'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM CONNECTING';
-  let received = false;
-  const watchdog = setTimeout(() => { if (!received && state.stream === socket) { socket.close(); } }, 30000);
-  socket.onopen = () => {
-    state.streamAttempt = 0; setStatus('RTX 3060', true); $('data-note').textContent = 'Race engineer decision workspace · live GPU stream verified'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE';
-  };
-  socket.onmessage = event => {
+  let received = false, buffer = '', watchdog = setTimeout(() => { if (!received) controller.abort(); }, 30000);
+  (async () => {
     try {
-      const frame = typeof event.data === 'string' ? JSON.parse(event.data) : null;
-      if (!frame) return;
-      received = true; clearTimeout(watchdog); consumeStreamFrame(frame); $('data-note').textContent = 'Race engineer decision workspace · live GPU stream verified';
-      $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE';
+      const response = await fetch(state.apiBase + '/streams/2026_11361/events?' + params.toString(), { signal: controller.signal, mode: 'cors', cache: 'no-store' });
+      if (!response.ok || !response.body) throw new Error('GPU stream returned ' + response.status);
+      state.streamAttempt = 0; setStatus('RTX 3060', true); $('data-note').textContent = 'Race engineer decision workspace · live GPU stream verified'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM LIVE';
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      while (true) {
+        const chunk = await reader.read(); if (chunk.done) break;
+        if (!received) { received = true; clearTimeout(watchdog); }
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const lines = buffer.split('\n'); buffer = lines.pop() || '';
+        for (const line of lines) if (line.trim()) consumeStreamFrame(JSON.parse(line));
+      }
+      if (buffer.trim()) consumeStreamFrame(JSON.parse(buffer));
+      throw new Error('GPU stream closed');
     } catch (error) {
-      $('data-note').textContent = 'GPU frame decode failed: ' + error.message;
+      clearTimeout(watchdog); if (controller.signal.aborted && !state.streamWanted) return;
+      if (state.httpAbort === controller) { state.httpAbort = null; $('data-note').textContent = 'GPU stream interrupted: ' + error.message; scheduleStreamReconnect(); }
     }
-  };
-  socket.onerror = () => {
-    if (state.stream === socket) $('data-note').textContent = 'GPU WebSocket transport error · retrying';
-  };
-  socket.onclose = event => {
-    clearTimeout(watchdog);
-    if (state.stream !== socket) return;
-    state.stream = null;
-    if (!state.streamWanted) return;
-    $('data-note').textContent = 'GPU stream closed (' + (event.code || 'transport') + ') · retrying';
-    scheduleStreamReconnect();
-  };
+  })();
 }
 async function applyScenario() {
   controlsFromInputs();
   const key = scenarioKey();
-  if (!state.connected) { $('scenario-result').textContent = 'GPU link pending · scenario will run when the remote simulator is available.'; return; }
+  if (!state.connected) { $('scenario-result').textContent = 'FAILED · GPU baseline is not ready.'; return; }
   if (state.assessmentCache.has(key)) {
     const cached = state.assessmentCache.get(key); state.assessment = cached.assessment || cached; if (cached.frames) state.frames = cached.frames;
-    state.scenarioKey = key; renderAssessment(); renderComparison(); $('scenario-result').textContent = 'CACHED GPU SCENARIO · ' + (state.assessment.recommendation?.action || 'HOLD') + ' · ' + fmtPct(state.assessment.answers?.can_pass_within_60s?.probability) + ' pass ≤60s'; startStream(true); return;
+    state.scenarioKey = key; renderAssessment(); renderComparison(); $('scenario-result').textContent = 'NO CUDA RUN NEEDED · this exact scenario is already loaded'; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO READY · CACHED'; return;
   }
   if (state.assessmentPromise) return state.assessmentPromise;
-  $('apply-scenario').disabled = true; $('apply-scenario').textContent = 'RUNNING CUDA SCENARIO…'; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU RECALCULATING';
+  const started = performance.now();
+  $('apply-scenario').disabled = true; $('apply-scenario').textContent = 'CUDA RUNNING…'; $('scenario-result').className = 'scenario-result running'; $('scenario-result').textContent = 'SUBMITTED · adjusted scenario is running on the RTX 3060'; $('sim-state').innerHTML = '<i class="live-dot"></i> CUDA RUNNING · AFTER SCENARIO'; $('data-badge').textContent = 'GPU COMPUTING';
   const payload = requestPayload();
   state.assessmentPromise = api('/engineer/assess', { method: 'POST', body: JSON.stringify({ request: payload, include_frames: true }) }).then(result => {
     state.assessmentCache.set(key, result); state.assessment = result; state.scenarioKey = key; state.frames = result.frames || state.frames; state.requestCount += 1; saveSnapshot();
-    $('compute-requests').textContent = state.requestCount + ' UNIQUE SCENARIOS'; renderAssessment(); renderComparison(); renderZones();
+    const elapsed = Math.round(performance.now() - started); setStatus('READY', true); $('compute-latency').textContent = elapsed + ' MS';
+    $('compute-requests').textContent = state.requestCount + ' AFTER RUN' + (state.requestCount === 1 ? '' : 'S'); renderAssessment(); renderComparison(); renderZones(); renderFrame();
     const ans = result.answers || {}; const cond = [state.controls.weather, state.controls.tire_compound, state.controls.vsc ? 'VSC' : '', state.controls.red_flag ? 'RED FLAG' : ''].filter(Boolean).join(' · ');
-    $('scenario-result').textContent = (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Number(ans.finish_position.expected).toFixed(1)) + (cond ? ' · ' + cond : '');
-    startStream(true);
-  }).catch(error => { $('scenario-result').textContent = 'GPU scenario failed · ' + error.message; $('sim-state').innerHTML = '<i class="live-dot"></i> GPU STREAM READY'; }).finally(() => { state.assessmentPromise = null; $('apply-scenario').disabled = false; $('apply-scenario').textContent = 'APPLY TO GPU SIMULATOR'; });
+    $('scenario-result').className = 'scenario-result success'; $('scenario-result').textContent = 'COMPLETE · ' + elapsed + ' ms · ' + (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Number(ans.finish_position.expected).toFixed(1)) + (cond ? ' · ' + cond : '');
+    $('sim-state').innerHTML = '<i class="live-dot"></i> COMPLETE · ADJUSTED SCENARIO LOADED';
+  }).catch(error => { setStatus('GPU ERROR', false); $('scenario-result').className = 'scenario-result failed'; $('scenario-result').textContent = 'FAILED · ' + error.message; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO FAILED'; }).finally(() => { state.assessmentPromise = null; $('apply-scenario').disabled = false; $('apply-scenario').textContent = 'APPLY TO GPU SIMULATOR'; });
   return state.assessmentPromise;
 }
 function tick(now) {
@@ -556,7 +555,7 @@ $('back').addEventListener('click', () => seek(state.time - 5));
 $('forward').addEventListener('click', () => seek(state.time + 5));
 $('timeline').addEventListener('input', e => seek(Number(e.target.value)));
 $('rate').addEventListener('change', e => { state.rate = Number(e.target.value); });
-$('live-stream').addEventListener('click', () => startStream(false));
+$('live-stream').disabled = true;
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch {} });
 $('weather').addEventListener('change', controlsFromInputs); $('tyre-compound').addEventListener('change', controlsFromInputs);
 $('track-select')?.addEventListener('change', e => selectTrack(e.target.value));
@@ -569,9 +568,9 @@ const context = document.modelContext;
 if (context?.registerTool) { try { context.registerTool({ name: 'configure_race_replay', title: 'Configure GPU race replay', description: 'Seek the remote GPU Overtiq replay and set playback state.', inputSchema: { type: 'object', properties: { seconds: { type: 'number', minimum: 0, maximum: 60 }, playing: { type: 'boolean' } }, required: ['seconds', 'playing'], additionalProperties: false }, execute(input) { seek(input.seconds); state.playing = input.playing; return { seconds: state.time, driver: 'OCO', playing: state.playing, gpuBacked: state.connected }; } }); } catch {} }
 
 try {
-  initThree(); syncControlInputs(); clearLiveState(); restoreSnapshot(); renderTrackInfo(); requestAnimationFrame(tick);
-  if (!state.apiBase) state.apiBase = LOCAL_GPU_ENDPOINT;
-  window.__overtiqBoot = { apiBase: state.apiBase, localHost: LOCAL_HOST };
+  initThree(); syncControlInputs(); clearLiveState(); renderTrackInfo(); requestAnimationFrame(tick);
+  if (!state.apiBase) state.apiBase = location.origin;
+  window.__overtiqBoot = { apiBase: state.apiBase, sameOrigin: state.apiBase === location.origin };
   connectGpu(true);
 } catch (error) {
   window.__overtiqBoot = { error: error?.message || String(error), apiBase: state.apiBase };
@@ -579,5 +578,4 @@ try {
   $('sim-state').innerHTML = '<i class="live-dot"></i> TERMINAL RETRYING';
   setTimeout(() => connectGpu(true), 1000);
 }
-window.addEventListener('online', () => { if (!state.connected) connectGpu(true); else if (!state.stream && !state.httpAbort) startStream(true); });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (!state.connected) connectGpu(true); else if (state.streamWanted && !state.stream && !state.httpAbort) startStream(true); } });
+window.addEventListener('online', () => { if (!state.connected) connectGpu(true); });
