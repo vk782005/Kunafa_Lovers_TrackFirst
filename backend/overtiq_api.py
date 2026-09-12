@@ -8,15 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import math
 import os
+import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Literal
 
 import torch
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -24,6 +28,17 @@ DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else None
 API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
 SERVICE_VERSION = "overtiq-gpu-0.2.0"
+
+# Simulation results are intentionally cached on the GPU service.  A browser
+# refresh or a transport reconnect must not launch a second Monte Carlo job for
+# the same race state.  The cache stores only compact response objects and is
+# bounded so it cannot grow with every engineer session.
+SIM_CACHE_TTL_S = float(os.getenv("OVERTIQ_SIM_CACHE_TTL_S", "900"))
+SIM_CACHE_MAX = int(os.getenv("OVERTIQ_SIM_CACHE_MAX", "32"))
+_SIM_CACHE: OrderedDict[str, tuple[float, tuple[list[dict[str, Any]], dict[str, Any]]]] = OrderedDict()
+_SIM_CACHE_LOCK = threading.RLock()
+_SIM_CACHE_HITS = 0
+_SIM_CACHE_MISSES = 0
 
 
 def require_gpu() -> torch.device:
@@ -240,7 +255,7 @@ def _frame(t: float, s: torch.Tensor, v: torch.Tensor, gap: torch.Tensor, batter
 
 
 @torch.inference_mode()
-def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _simulate_gpu_uncached(req: SimulationRequest, include_frames: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     device = require_gpu()
     torch.manual_seed(req.seed)
     conditions = _conditions(req)
@@ -325,6 +340,48 @@ def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[l
                     "final_fuel_kg": float(fuel.mean().item()), "conditions": {"weather": conditions["weather"], "rain_intensity": rain, "grip_factor": grip, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag}}
 
 
+def _simulation_cache_key(req: SimulationRequest, include_frames: bool) -> str:
+    payload = {"include_frames": include_frames, "request": req.model_dump(mode="json")}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def simulate_gpu(req: SimulationRequest, include_frames: bool = True) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Run or reuse one deterministic remote GPU simulation.
+
+    This wrapper is synchronous because the regular FastAPI routes are sync
+    handlers.  The lock also protects torch.manual_seed and CUDA allocator
+    state when an async stream offloads work to a worker thread.  It is held
+    through a cache miss so two simultaneous refreshes collapse into one CUDA
+    job instead of doubling the load on the 3060.
+    """
+    global _SIM_CACHE_HITS, _SIM_CACHE_MISSES
+    key = _simulation_cache_key(req, include_frames)
+    now = time.monotonic()
+    with _SIM_CACHE_LOCK:
+        cached = _SIM_CACHE.get(key)
+        if cached is not None:
+            created, result = cached
+            if now - created <= SIM_CACHE_TTL_S:
+                _SIM_CACHE.move_to_end(key)
+                _SIM_CACHE_HITS += 1
+                return result
+            _SIM_CACHE.pop(key, None)
+
+        _SIM_CACHE_MISSES += 1
+        result = _simulate_gpu_uncached(req, include_frames=include_frames)
+        _SIM_CACHE[key] = (time.monotonic(), result)
+        _SIM_CACHE.move_to_end(key)
+        while len(_SIM_CACHE) > max(1, SIM_CACHE_MAX):
+            _SIM_CACHE.popitem(last=False)
+        return result
+
+
+async def _stream_frames(req: SimulationRequest) -> list[dict[str, Any]]:
+    """Obtain a frame window without blocking Uvicorn's event loop."""
+    frames, _ = await asyncio.to_thread(simulate_gpu, req, True)
+    return frames
+
+
 def evidence(req: SimulationRequest, stats: dict[str, Any], label: str) -> dict[str, Any]:
     zone, sector, zone_type = _zone(req.gap_ahead_s * 130.0, req.track_length_m)
     return {"label": label, "lap": req.lap, "sector": sector, "zone": zone, "zone_type": zone_type, "gap_s": round(req.gap_ahead_s, 3),
@@ -392,7 +449,10 @@ app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv("
 def health() -> dict[str, Any]:
     if DEVICE is None:
         return {"status": "degraded", "gpu": {"available": False}, "service": SERVICE_VERSION}
-    return {"status": "ok", "gpu": {"available": True, "device": torch.cuda.get_device_name(0), "memory_allocated_mb": round(torch.cuda.memory_allocated(0) / 1e6, 1), "memory_reserved_mb": round(torch.cuda.memory_reserved(0) / 1e6, 1)}, "model": FORECASTER.version, "service": SERVICE_VERSION}
+    with _SIM_CACHE_LOCK:
+        cache = {"entries": len(_SIM_CACHE), "hits": _SIM_CACHE_HITS, "misses": _SIM_CACHE_MISSES,
+                 "ttl_s": SIM_CACHE_TTL_S, "max_entries": SIM_CACHE_MAX}
+    return {"status": "ok", "gpu": {"available": True, "device": torch.cuda.get_device_name(0), "memory_allocated_mb": round(torch.cuda.memory_allocated(0) / 1e6, 1), "memory_reserved_mb": round(torch.cuda.memory_reserved(0) / 1e6, 1)}, "model": FORECASTER.version, "simulation_cache": cache, "service": SERVICE_VERSION}
 
 
 @app.get("/physics/schema", dependencies=[Depends(authenticated)])
@@ -491,7 +551,7 @@ async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, w
     if decision in {"ATTACK", "DEFEND", "CONSERVE", "RECOVER"}: updates["decision"] = decision
     req = replay_request(replay_id).model_copy(update=updates)
     try:
-        frames, _ = simulate_gpu(req, include_frames=True)
+        frames = await _stream_frames(req)
         # Compute one device-resident scenario for this connection, then keep
         # the live view alive by replaying the frame window. This avoids a
         # second GPU request every time the one-minute window ends.
@@ -501,6 +561,50 @@ async def stream(websocket: WebSocket, replay_id: str, key: str | None = None, w
                 await asyncio.sleep(0.05)
     except WebSocketDisconnect:
         return
+
+
+@app.get("/streams/{replay_id}/events")
+async def stream_events(replay_id: str, key: str | None = None, weather: str | None = None,
+                        tire_compound: str | None = None, rain_intensity: float | None = None,
+                        ers_fraction: float | None = None, fuel_kg: float | None = None,
+                        vsc: bool | None = None, red_flag: bool | None = None,
+                        decision: str | None = None) -> StreamingResponse:
+    """Long-lived newline-delimited frame stream for browser/proxy compatibility.
+
+    A single GPU scenario is computed when the stream opens, then the compact
+    frame window is replayed indefinitely. The browser can consume this with
+    fetch() without a WebSocket upgrade, which is more reliable through local
+    proxies and browser privacy layers.
+    """
+    auth_value(key)
+    updates: dict[str, Any] = {"horizon_s": 60.0, "dt": 0.25}
+    if weather is not None: updates["weather"] = weather.upper()
+    if tire_compound is not None: updates["tire_compound"] = tire_compound.upper()
+    if rain_intensity is not None: updates["rain_intensity"] = max(0.0, min(1.0, rain_intensity))
+    if ers_fraction is not None: updates["ers_fraction"] = max(0.0, min(1.0, ers_fraction))
+    if fuel_kg is not None: updates["fuel_kg"] = max(0.0, min(110.0, fuel_kg))
+    if vsc is not None: updates["vsc"] = vsc
+    if red_flag is not None: updates["red_flag"] = red_flag
+    if decision in {"ATTACK", "DEFEND", "CONSERVE", "RECOVER"}: updates["decision"] = decision
+    req = replay_request(replay_id).model_copy(update=updates)
+
+    async def events():
+        # Flush a transport heartbeat immediately so the browser can mark the
+        # link alive while the first CUDA scenario is being compiled.
+        yield "\n"
+        try:
+            frames = await _stream_frames(req)
+            while True:
+                for frame in frames:
+                    yield json.dumps(frame, separators=(",", ":")) + "\n"
+                    await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "X-Accel-Buffering": "no",
+    })
 
 
 if __name__ == "__main__":
