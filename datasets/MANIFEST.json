@@ -1,0 +1,939 @@
+{
+ "package": "TrackShift / OVERTIQ energy and overtake model",
+ "built_utc": "2026-09-12T12:17:25Z",
+ "scope": "2026 Formula 1 season, 13 races with complete feeds. 2025 data deliberately excluded: different power unit regulations, no Overtake mode.",
+ "provenance_legend": {
+  "MEASURED": "present in the source feed as recorded by the timing/telemetry supplier",
+  "DERIVED": "computed by us from MEASURED data by a documented formula",
+  "ESTIMATED": "output of a model with free parameters calibrated against data",
+  "ASSUMED": "a constant we chose; no data supports the specific value",
+  "REGULATORY": "read from the FIA 2026 Formula 1 Technical Regulations"
+ },
+ "sources": [
+  {
+   "dataset": "OpenF1 REST API",
+   "url": "https://api.openf1.org/v1",
+   "licence": "free/open, no key",
+   "endpoints_used": [
+    "sessions",
+    "drivers",
+    "car_data",
+    "location",
+    "laps",
+    "stints",
+    "intervals",
+    "position",
+    "pit",
+    "race_control",
+    "weather",
+    "overtakes"
+   ],
+   "downloaded": "2026-09-10 to 2026-09-12",
+   "provenance": "MEASURED",
+   "note": "car_data is ~4 Hz per driver. The 2026 sessions carry NO ERS, SOC, deployment or DRS content: the drs field is empty on every 2026 session."
+  },
+  {
+   "dataset": "FIA 2026 Formula 1 Technical Regulations",
+   "provenance": "REGULATORY",
+   "articles_used": {
+    "C5.2.3-C5.2.5": "fuel energy flow limits",
+    "C5.2.7": "ERS-K 350 kW ceiling",
+    "C5.2.8": "non-Overtake and Overtake ERS-K power curves vs speed",
+    "C5.2.9": "4 MJ usable SOC swing",
+    "C5.2.10": "8.5 MJ per lap recharge limit",
+    "C4.1/C4.7": "minimum mass and nominal tyre mass"
+   },
+   "encoded_in": "pilot/rules_2026.py"
+  },
+  {
+   "dataset": "Track maps",
+   "provenance": "DERIVED",
+   "note": "built from the OpenF1 location feed (x, y, z at ~4 Hz) by fitting a centreline and arc length; gives track_s, curvature, gradient, offset."
+  },
+  {
+   "dataset": "Vehicle identification",
+   "provenance": "ESTIMATED",
+   "note": "CdA and rolling terms fitted per session from coast-down segments of the measured telemetry; see params/vehicle_identification.json for per-session CI."
+  }
+ ],
+ "telemetry": {
+  "resolution": "source cadence, nominally 4 Hz; the per-session median sample interval is reported below. It is NOT a uniform 0.25 s grid: intervals vary and gaps occur.",
+  "files": [
+   {
+    "session_key": 11234,
+    "circuit": "Melbourne",
+    "file": "2026_11234_Melbourne.parquet",
+    "rows": 495363,
+    "drivers": 22,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-03-07 06:23:06.195000+00:00",
+    "date_end": "2026-03-08 05:28:37.147000+00:00",
+    "cda_m2": 0.925,
+    "cda_note": null,
+    "air_density": 1.1787,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.522,
+    "size_mb": 23.2
+   },
+   {
+    "session_key": 11245,
+    "circuit": "Shanghai",
+    "file": "2026_11245_Shanghai.parquet",
+    "rows": 317442,
+    "drivers": 21,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-03-15 06:20:20.083000+00:00",
+    "date_end": "2026-03-15 08:39:53.270000+00:00",
+    "cda_m2": 1.0,
+    "cda_note": "session CdA 0.49 not credible; calendar median 1.0 used",
+    "air_density": 1.232,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5782,
+    "size_mb": 20.5
+   },
+   {
+    "session_key": 11253,
+    "circuit": "Suzuka",
+    "file": "2026_11253_Suzuka.parquet",
+    "rows": 554416,
+    "drivers": 22,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-03-28 07:03:24.611000+00:00",
+    "date_end": "2026-03-29 06:46:37.688000+00:00",
+    "cda_m2": 1.123,
+    "cda_note": null,
+    "air_density": 1.2035,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.6536,
+    "size_mb": 28.3
+   },
+   {
+    "session_key": 11280,
+    "circuit": "Miami",
+    "file": "2026_11280_Miami.parquet",
+    "rows": 507230,
+    "drivers": 20,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-05-03 16:19:11.819000+00:00",
+    "date_end": "2026-05-03 18:42:35.969000+00:00",
+    "cda_m2": 0.976,
+    "cda_note": null,
+    "air_density": 1.1667,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.6099,
+    "size_mb": 24.2
+   },
+   {
+    "session_key": 11291,
+    "circuit": "Montreal",
+    "file": "2026_11291_Montreal.parquet",
+    "rows": 526333,
+    "drivers": 20,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-05-24 19:19:12.798000+00:00",
+    "date_end": "2026-05-24 21:42:40.829000+00:00",
+    "cda_m2": 1.003,
+    "cda_note": null,
+    "air_density": 1.2426,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5847,
+    "size_mb": 24.3
+   },
+   {
+    "session_key": 11299,
+    "circuit": "Monte Carlo",
+    "file": "2026_11299_Monte_Carlo.parquet",
+    "rows": 86328,
+    "drivers": 21,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-06-07 12:16:10.510000+00:00",
+    "date_end": "2026-06-07 13:09:42.881000+00:00",
+    "cda_m2": 1.0,
+    "cda_note": "session CdA None not credible; calendar median 1.0 used",
+    "air_density": 1.1906,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.4771,
+    "size_mb": 3.8
+   },
+   {
+    "session_key": 11307,
+    "circuit": "Catalunya",
+    "file": "2026_11307_Catalunya.parquet",
+    "rows": 464467,
+    "drivers": 18,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-06-14 12:17:59.209000+00:00",
+    "date_end": "2026-06-14 14:39:53.405000+00:00",
+    "cda_m2": 0.979,
+    "cda_note": null,
+    "air_density": 1.142,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5517,
+    "size_mb": 25.4
+   },
+   {
+    "session_key": 11315,
+    "circuit": "Spielberg",
+    "file": "2026_11315_Spielberg.parquet",
+    "rows": 475690,
+    "drivers": 19,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5189999938011169
+    ],
+    "date_start": "2026-06-28 12:18:16.041000+00:00",
+    "date_end": "2026-06-28 14:34:22.633000+00:00",
+    "cda_m2": 0.995,
+    "cda_note": null,
+    "air_density": 1.0588,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5871,
+    "size_mb": 25.9
+   },
+   {
+    "session_key": 11326,
+    "circuit": "Silverstone",
+    "file": "2026_11326_Silverstone.parquet",
+    "rows": 500224,
+    "drivers": 20,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-07-05 13:18:53.840000+00:00",
+    "date_end": "2026-07-05 15:39:13.470000+00:00",
+    "cda_m2": 1.077,
+    "cda_note": null,
+    "air_density": 1.169,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5909,
+    "size_mb": 27.3
+   },
+   {
+    "session_key": 11334,
+    "circuit": "Spa-Francorchamps",
+    "file": "2026_11334_Spa-Francorchamps.parquet",
+    "rows": 509121,
+    "drivers": 21,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-07-19 12:18:33.187000+00:00",
+    "date_end": "2026-07-19 14:32:02.139000+00:00",
+    "cda_m2": 0.957,
+    "cda_note": null,
+    "air_density": 1.1591,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5621,
+    "size_mb": 26.8
+   },
+   {
+    "session_key": 11342,
+    "circuit": "Hungaroring",
+    "file": "2026_11342_Hungaroring.parquet",
+    "rows": 532916,
+    "drivers": 21,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-07-25 15:03:27.951000+00:00",
+    "date_end": "2026-07-26 14:46:16.638000+00:00",
+    "cda_m2": 0.954,
+    "cda_note": null,
+    "air_density": 1.1179,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.4551,
+    "size_mb": 20.0
+   },
+   {
+    "session_key": 11353,
+    "circuit": "Zandvoort",
+    "file": "2026_11353_Zandvoort.parquet",
+    "rows": 542078,
+    "drivers": 18,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.47999998927116394
+    ],
+    "date_start": "2026-08-23 12:19:44.224000+00:00",
+    "date_end": "2026-08-23 15:13:39.381000+00:00",
+    "cda_m2": 0.977,
+    "cda_note": null,
+    "air_density": 1.2165,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.561,
+    "size_mb": 25.6
+   },
+   {
+    "session_key": 11361,
+    "circuit": "Monza",
+    "file": "2026_11361_Monza.parquet",
+    "rows": 650972,
+    "drivers": 22,
+    "sample_dt_median_s": 0.2800000011920929,
+    "sample_dt_p10_p90_s": [
+     0.1599999964237213,
+     0.5199999809265137
+    ],
+    "date_start": "2026-09-05 15:03:28.139000+00:00",
+    "date_end": "2026-09-06 15:01:54.014000+00:00",
+    "cda_m2": 0.999,
+    "cda_note": null,
+    "air_density": 1.1333,
+    "mass_kg": 803.0,
+    "eta_ice_calibrated": 0.5589,
+    "size_mb": 25.4
+   }
+  ],
+  "row_grain": "one driver, one telemetry sample",
+  "columns": {
+   "date": [
+    "MEASURED",
+    "UTC timestamp of the sample"
+   ],
+   "session_key": [
+    "MEASURED",
+    "OpenF1 session identifier"
+   ],
+   "circuit": [
+    "MEASURED",
+    "circuit short name"
+   ],
+   "session_name": [
+    "MEASURED",
+    "always 'Race' here"
+   ],
+   "driver_number": [
+    "MEASURED",
+    "car number"
+   ],
+   "is_haas": [
+    "DERIVED",
+    "driver_number in {31, 87}"
+   ],
+   "t": [
+    "MEASURED",
+    "seconds since the session feed start, the join key with the source"
+   ],
+   "dt": [
+    "DERIVED",
+    "seconds since this driver's previous sample; NaN if > 1 s (not integrated)"
+   ],
+   "lap": [
+    "DERIVED",
+    "lap number, from laps.date_start"
+   ],
+   "lap_ok": [
+    "DERIVED",
+    "sample lies inside that lap's recorded duration + 2 s"
+   ],
+   "neutral": [
+    "DERIVED",
+    "inside a safety car / VSC / red flag window (race_control), padded 10 s before and 30 s after"
+   ],
+   "overtake_legal": [
+    "MEASURED",
+    "outside an OVERTAKE DISABLED window in the race_control feed"
+   ],
+   "speed_ms": [
+    "MEASURED",
+    "speed, m/s (source is km/h integer)"
+   ],
+   "v_kph": [
+    "MEASURED",
+    "speed, km/h"
+   ],
+   "a_smoothed_ms2": [
+    "DERIVED",
+    "longitudinal acceleration, centred rolling mean over ~1 s of the source-derived value"
+   ],
+   "throttle": [
+    "MEASURED",
+    "throttle, 0-100 (source occasionally reports up to 104)"
+   ],
+   "brake": [
+    "MEASURED",
+    "brake, 0-100"
+   ],
+   "n_gear": [
+    "MEASURED",
+    "gear"
+   ],
+   "rpm": [
+    "MEASURED",
+    "engine rpm"
+   ],
+   "x": [
+    "MEASURED",
+    "track position x, m"
+   ],
+   "y": [
+    "MEASURED",
+    "track position y, m"
+   ],
+   "z": [
+    "MEASURED",
+    "elevation, m"
+   ],
+   "grade_sin": [
+    "DERIVED",
+    "sine of the longitudinal gradient, differenced from this car's own z along its own path. NULL on stationary and pit-lane samples (0 % null among moving samples, v > 54 km/h). This is the channel the power split uses."
+   ],
+   "curv": [
+    "DERIVED",
+    "signed curvature, 1/m, differenced from this car's own path. Same null pattern as grade_sin."
+   ],
+   "grade_here": [
+    "DERIVED",
+    "gradient interpolated from the fitted track map at this arc length. Never null. Correlates 0.990 with grade_sin on moving samples and gives an identical grade-power distribution (mean |P| 12.0 vs 11.8 kW at Spa); use it if you want a gap-free channel."
+   ],
+   "curv_here": [
+    "DERIVED",
+    "curvature from the fitted track map at this arc length. Never null."
+   ],
+   "track_s": [
+    "DERIVED",
+    "arc length from the start line, m"
+   ],
+   "track_offset_m": [
+    "DERIVED",
+    "lateral offset from the fitted centreline, m"
+   ],
+   "dist_to_next_corner_m": [
+    "DERIVED",
+    "metres to the next curvature peak"
+   ],
+   "p_kinetic_kw": [
+    "DERIVED",
+    "m * a * v / 1000"
+   ],
+   "p_drag_kw": [
+    "DERIVED",
+    "0.5 * rho * CdA * v^3 / 1000 * drag_tow_factor"
+   ],
+   "p_rolling_kw": [
+    "DERIVED",
+    "c_roll * m * v / 1000, c_roll ASSUMED 0.30 m/s^2"
+   ],
+   "p_grade_kw": [
+    "DERIVED",
+    "m * g * sin(theta) * v / 1000"
+   ],
+   "p_wheel_kw": [
+    "DERIVED",
+    "sum of the four terms above: total power at the wheels"
+   ],
+   "drag_tow_factor": [
+    "ASSUMED",
+    "drag multiplier for running in a tow: 0.80 inside 0.5 s, 0.86 at 0.5-1.0 s, 1.0 otherwise"
+   ],
+   "fuel_flow_limit_kw": [
+    "REGULATORY",
+    "C5.2.4 min(3000, 0.27*rpm + 165) MJ/h expressed in kW"
+   ],
+   "p_ice_kw": [
+    "ESTIMATED",
+    "eta_ice * fuel_flow_limit_kw * throttle/100; eta_ice calibrated per race so the median green lap closes"
+   ],
+   "p_ers_demand_kw": [
+    "ESTIMATED",
+    "p_wheel_kw / eta_drive - p_ice_kw; positive means the battery is being drawn on"
+   ],
+   "ers_curve_limit_kw": [
+    "REGULATORY",
+    "C5.2.8 Overtake or non-Overtake ERS-K ceiling at this speed, per the race_control state"
+   ],
+   "p_deploy_kw": [
+    "ESTIMATED",
+    "clip(p_ers_demand_kw, 0, ers_curve_limit_kw), zero at closed throttle"
+   ],
+   "p_regen_kw": [
+    "ESTIMATED",
+    "min(rear_share * |p_wheel_kw|, 350 kW) * eta_regen while braking; rear_share ASSUMED 0.40"
+   ],
+   "soc_mj": [
+    "ESTIMATED",
+    "running integral clip(SOC - (deploy - regen) dt, 0, 4 MJ). The LEVEL is set by the clipping, not observed. Use the within-lap shape and per-lap totals, not the absolute value."
+   ],
+   "zone_id": [
+    "DERIVED",
+    "index of the >290 kph zone this sample is inside, -1 if none"
+   ],
+   "dist_to_zone_m": [
+    "DERIVED",
+    "metres to the entry of the next >290 kph zone, 0 inside one"
+   ],
+   "gap_ahead": [
+    "MEASURED",
+    "seconds to the car ahead, latest intervals reading, accepted up to 15 s stale. Source cadence is ~4 s. Null on ~44 % of all samples but only ~15 % of in-lap (lap_ok) samples: the remainder are pit, grid, formation and out-lap samples, plus the race leader, who has no car ahead."
+   ],
+   "gap_closing_rate_s_per_s": [
+    "DERIVED",
+    "d(gap)/dt of the smoothed intervals series. COARSE: inherits the ~4 s source cadence."
+   ],
+   "approach_speed_kph_equiv": [
+    "DERIVED",
+    "-gap_closing_rate * v_kph: an equivalent closing speed. Same coarseness caveat."
+   ],
+   "cda_m2": [
+    "ESTIMATED",
+    "session drag area from the coast-down fit"
+   ],
+   "air_density_kg_m3": [
+    "MEASURED",
+    "from the weather feed"
+   ],
+   "mass_kg": [
+    "ASSUMED",
+    "724 kg regulatory + 44 kg nominal tyres + 35 kg session-mean fuel = 803 kg"
+   ],
+   "eta_ice_calibrated": [
+    "ESTIMATED",
+    "the single free scalar of the energy balance, one value per race"
+   ]
+  },
+  "null_patterns": {
+   "grade_sin / curv": "null on stationary and pit-lane samples only; 0 % null among moving samples. grade_here / curv_here are the never-null track-map equivalents.",
+   "gap_ahead and its derivatives": "~15 % null among in-lap samples (leader, or no intervals reading within 15 s); ~44 % across all samples including pit and formation laps.",
+   "dt": "null where the gap to the previous sample exceeded 1 s; those samples are excluded from every energy integral.",
+   "lap / lap_ok": "lap_ok is False outside a recorded lap window; the analysis sets always filter on it."
+  },
+  "not_available": {
+   "true_SOC": "no public feed carries it. soc_mj is our estimate.",
+   "MGU-K measured power / torque / efficiency maps": "not published. Only the regulatory ceiling curves are known; eta_drive 0.95 and eta_regen 0.90 are ASSUMED.",
+   "battery capacity, voltage, internal resistance, temperature": "not published. Only the 4 MJ regulatory swing is used.",
+   "ICE torque curve": "not published. We model ICE power as a fraction of the regulatory fuel-flow limit scaled by throttle; there is no torque map.",
+   "brake pressure, steering, tyre temperature, fuel load": "not in the public feed.",
+   "DRS": "the drs field is empty for every 2026 session."
+  }
+ },
+ "labels": {
+  "zone_events.parquet": {
+   "grain": "one passage of one >290 kph zone by one car",
+   "rows": 27708,
+   "outcome": [
+    "MEASURED",
+    "passed: this car passed the car that was ahead at zone entry, between zone entry and zone exit + 8 s, per the overtakes feed"
+   ],
+   "key_columns": {
+    "gap_entry": [
+     "MEASURED",
+     "gap to the car ahead at zone entry, s"
+    ],
+    "leader": [
+     "MEASURED",
+     "car number that was ahead at zone entry, from the position feed"
+    ],
+    "deploy_mj": [
+     "ESTIMATED",
+     "energy drawn inside the zone"
+    ],
+    "deployed": [
+     "ESTIMATED",
+     "deploy_mj >= 0.12 MJ"
+    ],
+    "rival_deployed": [
+     "ESTIMATED",
+     "the leader's own deployment at the same zone and lap"
+    ],
+    "soc_entry / rival_soc_entry": [
+     "ESTIMATED",
+     "SOC at zone entry"
+    ],
+    "tyre_age / tyre_age_leader / tyre_delta": [
+     "MEASURED",
+     "from the stints feed"
+    ],
+    "prev_zone_own_deployed / prev_zone_rival_deployed": [
+     "ESTIMATED",
+     "what each car did at the previous zone of the same lap"
+    ],
+    "own_deploys_earlier_in_lap / rival_deploys_earlier_in_lap": [
+     "ESTIMATED",
+     "cumulative deployments earlier in this lap"
+    ],
+    "zone / n_zones / zone_len_m / next_zone_m": [
+     "DERIVED",
+     "zone geometry"
+    ],
+    "vmax": [
+     "MEASURED",
+     "top speed inside the zone, km/h"
+    ],
+    "neutral / lap_ok / legal": [
+     "DERIVED",
+     "cleanliness flags; the analysis set is ~neutral & lap_ok & leader>0 & gap_entry<=2.5"
+    ]
+   },
+   "exclusions": "safety car / VSC / red flag windows, samples outside a recorded lap"
+  },
+  "lap_trials.parquet": {
+   "grain": "one 60 s non-overlapping trial for one follower-leader pair",
+   "outcome": [
+    "MEASURED",
+    "passed (60 s), lost_place, durable3 (passed and still ahead 3 laps later), gained3 (race position improved)"
+   ],
+   "exclusions": "first 180 s of the race, neutralised windows padded 10/30 s, pit windows +/-90 s for either car, gaps over 5 s",
+   "note": "clean3 marks trials with a usable +3-lap window (neither car pitted, no neutralisation started, race not over): 86 % qualify"
+  }
+ },
+ "params": {
+  "constants.json": "every regulatory, assumed and measured constant used anywhere in the pipeline",
+  "vehicle_identification.json": "per-session CdA with 95 % CI, air density, assumed mass, coast-fit diagnostics",
+  "zones_by_circuit.json": "the >290 km/h zones per circuit: start and end arc length, length. Derived from the field's median speed profile in 10 m bins."
+ },
+ "models": {
+  "production": {
+   "zone_pass_model": {
+    "name": "P(pass in this zone passage)",
+    "family": "logistic regression, L2 1e-2, Newton",
+    "target": "passed: this car passed the car that was ahead at zone entry, between zone entry and zone exit + 8 s (overtakes feed)",
+    "feature_order": [
+     "intercept",
+     "gap",
+     "tyre_delta",
+     "own_dep",
+     "rival_dep",
+     "own_x_norival",
+     "len_km",
+     "next_km",
+     "is_last",
+     "gap_x_owndep"
+    ],
+    "coefficients": {
+     "intercept": -0.7075777832923592,
+     "gap": -6.026485573777835,
+     "tyre_delta": -0.04895038433595806,
+     "own_dep": -0.13455035383372793,
+     "rival_dep": -0.11816067407748346,
+     "own_x_norival": 1.055251955308986,
+     "len_km": 1.5560826217886794,
+     "next_km": 0.1588318525718114,
+     "is_last": 0.4247931092675822,
+     "gap_x_owndep": 0.21790016690200298
+    },
+    "feature_definitions": {
+     "gap": "gap_entry, seconds to the car ahead at zone entry (intervals feed, latest reading)",
+     "tyre_delta": "own tyre age minus the car ahead's, laps (stints feed); NaN -> 0",
+     "own_dep": "1 if this car drew >= 0.12 MJ inside the zone (ESTIMATED), else 0",
+     "rival_dep": "same for the car ahead, same zone same lap (ESTIMATED); NaN -> 0",
+     "own_x_norival": "own_dep * (1 - rival_dep): the unmatched-deployment interaction",
+     "len_km": "zone length in km",
+     "next_km": "metres from this zone's exit to the next zone's entry, /1000, capped 6",
+     "is_last": "1 if this is the final zone of the lap",
+     "gap_x_owndep": "gap * own_dep"
+    },
+    "preprocessing": "none: raw units, no scaler, no encoder. NaN handling as stated per feature.",
+    "output": "probability in [0,1] via 1/(1+exp(-x.b)), x prefixed with a 1.0 intercept column",
+    "n_train": 10726
+   },
+   "rival_cover_model": {
+    "name": "P(the car ahead deploys in this zone)",
+    "family": "logistic regression, L2 1e-2, Newton",
+    "target": "rival_dep: the car ahead drew >= 0.12 MJ in this zone (ESTIMATED)",
+    "feature_order": [
+     "intercept",
+     "rival_soc",
+     "rival_deploys_earlier",
+     "rival_prev_zone",
+     "rival_gap_ahead_of_them",
+     "gap",
+     "tyre_delta",
+     "len_km",
+     "is_last",
+     "lap_phase",
+     "zone_idx"
+    ],
+    "coefficients": {
+     "intercept": -1.940559726452234,
+     "rival_soc": -0.27364141130466757,
+     "rival_deploys_earlier": 0.6096490191848467,
+     "rival_prev_zone": 0.05772237959270659,
+     "rival_gap_ahead_of_them": -0.00991799169367214,
+     "gap": -0.2114018519558647,
+     "tyre_delta": -0.01166365647510053,
+     "len_km": 4.432492080111768,
+     "is_last": 1.679664114999441,
+     "lap_phase": -0.3868757212959778,
+     "zone_idx": -0.4455625799447156
+    },
+    "feature_definitions": {
+     "rival_soc": "car ahead's ESTIMATED SOC at zone entry, MJ; NaN -> 2.5",
+     "rival_deploys_earlier": "count of zones this lap where the car ahead already deployed",
+     "rival_prev_zone": "1 if the car ahead deployed at the previous zone of this lap; NaN -> 0.5",
+     "rival_gap_ahead_of_them": "the car ahead's own gap to the car in front of it, s, capped 5; NaN -> 5",
+     "gap": "our gap to them at zone entry, s",
+     "tyre_delta": "our tyre age minus theirs, laps",
+     "len_km": "zone length km",
+     "is_last": "final zone of the lap",
+     "lap_phase": "lap number / total laps",
+     "zone_idx": "index of the zone within the lap, 0-based"
+    },
+    "preprocessing": "none: raw units, NaN fills as stated",
+    "output": "probability the car ahead covers; used as c in the policy EV",
+    "n_train": 10726
+   },
+   "deployment_policy": {
+    "name": "per-zone deploy decision",
+    "rule": "deploy iff (1-c)*gain_unmatched + c*gain_matched >= tau",
+    "gain_unmatched": "zone_pass_model(own_dep=1, rival_dep=0) - zone_pass_model(own_dep=0, rival_dep=0)",
+    "gain_matched": "zone_pass_model(own_dep=1, rival_dep=1) - zone_pass_model(own_dep=0, rival_dep=1)",
+    "c": "rival_cover_model output",
+    "tau_recommended": 0.04,
+    "tau_units": "probability of a pass, per deployment",
+    "note": "uses no information dated after the decision instant"
+   },
+   "lap_trial_models": {
+    "note": "60 s trial horizon, superseded by the zone models for deployment decisions but used for the attack/hold/defend call",
+    "feature_order": [
+     "intercept",
+     "gap_s",
+     "tyre_age_delta_laps"
+    ],
+    "preprocessing": "none",
+    "pass_60s": {
+     "coefficients": {
+      "intercept": -0.8405861024010692,
+      "gap_s": -1.9463537472006074,
+      "tyre_age_delta_laps": -0.08489712734227542
+     },
+     "target": "a pass of the car ahead within 60 s (overtakes feed)",
+     "n_train": 10716
+    },
+    "durable_pass_3laps": {
+     "coefficients": {
+      "intercept": -0.9764328657532347,
+      "gap_s": -2.244543745932602,
+      "tyre_age_delta_laps": -0.10726849697747781
+     },
+     "target": "passed within 60 s AND still ahead of that car 3 laps later, clean window only",
+     "n_train": 9169
+    }
+   }
+  },
+  "mlp": {
+   "status": "saved",
+   "file": "mlp_zone_pass.pt",
+   "features": [
+    "gap",
+    "tyre_delta",
+    "own_dep",
+    "rival_dep",
+    "own_x_norival",
+    "len_km",
+    "next_km",
+    "is_last",
+    "gap_x_owndep"
+   ],
+   "n_train": 10726,
+   "in_sample_brier": 0.09585016220808029,
+   "warning": "IN-SAMPLE fit for interface completeness. The LOCO evaluation (reports/haas_eval/gpu_pass_model.json) showed the MLP does not beat the logistic out of fold; the logistic is the shipped model."
+  },
+  "how_to_score": "p = 1/(1+exp(-(b0 + sum(b_i * x_i)))) with the features in feature_order, raw units, no scaling. The MLP is the only artefact needing the bundled scaler."
+ },
+ "baselines": {
+  "files": {
+   "zone_measure.json": "copied",
+   "zone_policy.json": "copied",
+   "zone_realtime.json": "copied",
+   "haas_eval.json": "copied",
+   "soc_calibration.json": "copied"
+  },
+  "descriptions": {
+   "zone_measure.json": "raw per-zone measurement: pass rate by gap at entry crossed with who deployed; the sequencing tables; per-zone base rates",
+   "zone_policy.json": "the LOCO zone pass model, the 2x2 Nash solution per zone, within-lap sequencing by backward induction, and a first backtest",
+   "zone_realtime.json": "the rival-coverage model and the honest real-time policy backtest, including the perfect-information oracle",
+   "haas_eval.json": "lap-level Haas evaluation: outcome metrics, feature information, probability quality, Q2 metrics, defending",
+   "gpu_pass_model.json": "MLP leave-one-circuit-out check and drop-one ablations against the logistic",
+   "soc_calibration.json": "per-race eta_ice, lap closure spread, parameter sensitivity, and the two estimator validations"
+  }
+ },
+ "known_limitations": [
+  "No measured energy channel exists. Every SOC, deployment and harvesting number is an estimate from an energy balance with one calibrated scalar and several assumed constants. Per-lap totals carry about +/-25 % from the assumed 0.40 regen share alone.",
+  "The SOC level is pinned by clipping at 0 and 4 MJ (15-27 % of laps touch the floor, 27-39 % the ceiling). Use the shape and the per-lap totals, not the absolute level.",
+  "The drag model books slipstream as deployment unless the tow correction is applied. These files use the tow-corrected (strong) variant; the correction factor itself is ASSUMED, not fitted.",
+  "Gap data comes from the intervals feed at roughly 4 s cadence. Closing rates derived from it are correspondingly coarse.",
+  "13 races is 11 circuits with zones (Monaco and the Hungaroring have none above 290 km/h). Bootstrap confidence intervals on precision are about +/-0.05.",
+  "Monaco has telemetry for only 7 % of its trials. Shanghai's fitted CdA (0.49) was not credible and the calendar median was substituted.",
+  "Zone passes are 624 of 2,916 total passes: roughly one pass in five happens in an Overtake zone. The zone model addresses that fifth.",
+  "The 'expected extra passes' in the backtests are the model's own causal estimate summed over a policy's deploy set, not counted outcomes. They are only as good as the model's deployment coefficient."
+ ],
+ "files": [
+  {
+   "path": "baselines/haas_eval.json",
+   "size_mb": 0.04,
+   "sha256_16": "d40a5bc575ba47da"
+  },
+  {
+   "path": "baselines/soc_calibration.json",
+   "size_mb": 0.04,
+   "sha256_16": "afc887fb53f4521b"
+  },
+  {
+   "path": "baselines/zone_measure.json",
+   "size_mb": 0.01,
+   "sha256_16": "98afa6ae90029f0a"
+  },
+  {
+   "path": "baselines/zone_policy.json",
+   "size_mb": 0.08,
+   "sha256_16": "55973f093608734a"
+  },
+  {
+   "path": "baselines/zone_realtime.json",
+   "size_mb": 0.01,
+   "sha256_16": "36311b7cba135d92"
+  },
+  {
+   "path": "labels/lap_trials.parquet",
+   "size_mb": 0.98,
+   "sha256_16": "07862498b64ba0ba"
+  },
+  {
+   "path": "labels/zone_events.parquet",
+   "size_mb": 1.86,
+   "sha256_16": "3c2b6213ca185ec0"
+  },
+  {
+   "path": "models/deployment_policy.json",
+   "size_mb": 0.0,
+   "sha256_16": "cc370060eac8890c"
+  },
+  {
+   "path": "models/lap_trial_models.json",
+   "size_mb": 0.0,
+   "sha256_16": "cac26b758c1c1272"
+  },
+  {
+   "path": "models/mlp_zone_pass.pt",
+   "size_mb": 0.01,
+   "sha256_16": "37db59bb2ecce47e"
+  },
+  {
+   "path": "models/rival_cover_model.json",
+   "size_mb": 0.0,
+   "sha256_16": "6fc699d8aebe5fe1"
+  },
+  {
+   "path": "models/zone_pass_model.json",
+   "size_mb": 0.0,
+   "sha256_16": "afa12c6af1e8d236"
+  },
+  {
+   "path": "params/constants.json",
+   "size_mb": 0.0,
+   "sha256_16": "13153739366099ed"
+  },
+  {
+   "path": "params/vehicle_identification.json",
+   "size_mb": 0.15,
+   "sha256_16": "a405e9d096b6ecb9"
+  },
+  {
+   "path": "params/zones_by_circuit.json",
+   "size_mb": 0.0,
+   "sha256_16": "1102aa30f8d939ca"
+  },
+  {
+   "path": "telemetry/2026_11234_Melbourne.parquet",
+   "size_mb": 23.2,
+   "sha256_16": "0ecd92a6a5a3520d"
+  },
+  {
+   "path": "telemetry/2026_11245_Shanghai.parquet",
+   "size_mb": 20.53,
+   "sha256_16": "587f8cdcb14b8348"
+  },
+  {
+   "path": "telemetry/2026_11253_Suzuka.parquet",
+   "size_mb": 28.28,
+   "sha256_16": "a8d6609eef5dfd22"
+  },
+  {
+   "path": "telemetry/2026_11280_Miami.parquet",
+   "size_mb": 24.21,
+   "sha256_16": "7a143726042410fb"
+  },
+  {
+   "path": "telemetry/2026_11291_Montreal.parquet",
+   "size_mb": 24.35,
+   "sha256_16": "80cf98bcad1a78fe"
+  },
+  {
+   "path": "telemetry/2026_11299_Monte_Carlo.parquet",
+   "size_mb": 3.82,
+   "sha256_16": "c6d687dc9045f637"
+  },
+  {
+   "path": "telemetry/2026_11307_Catalunya.parquet",
+   "size_mb": 25.42,
+   "sha256_16": "4f3bfce3aaf1c561"
+  },
+  {
+   "path": "telemetry/2026_11315_Spielberg.parquet",
+   "size_mb": 25.93,
+   "sha256_16": "a69dfb949bd5c6ef"
+  },
+  {
+   "path": "telemetry/2026_11326_Silverstone.parquet",
+   "size_mb": 27.32,
+   "sha256_16": "b3d2068718be03dd"
+  },
+  {
+   "path": "telemetry/2026_11334_Spa-Francorchamps.parquet",
+   "size_mb": 26.82,
+   "sha256_16": "c71e741c17ae1a51"
+  },
+  {
+   "path": "telemetry/2026_11342_Hungaroring.parquet",
+   "size_mb": 20.0,
+   "sha256_16": "6e8294077ba90679"
+  },
+  {
+   "path": "telemetry/2026_11353_Zandvoort.parquet",
+   "size_mb": 25.58,
+   "sha256_16": "9d4ee32b487a6666"
+  },
+  {
+   "path": "telemetry/2026_11361_Monza.parquet",
+   "size_mb": 25.38,
+   "sha256_16": "8a86a9fade7a7e13"
+  }
+ ],
+ "total_size_mb": 304.0
+}

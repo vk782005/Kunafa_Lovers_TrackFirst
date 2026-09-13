@@ -1,0 +1,171 @@
+{
+ "file": "reports/model/forecaster_2026_v1.pt",
+ "features": [
+  "v",
+  "a",
+  "throttle",
+  "brake",
+  "n_gear",
+  "rpm",
+  "drs",
+  "a_resist",
+  "curv_here",
+  "grade_here",
+  "max_abs_curv_next_200m",
+  "curv_ahead_25m",
+  "curv_ahead_50m",
+  "curv_ahead_100m",
+  "curv_ahead_200m",
+  "curv_ahead_400m",
+  "grade_ahead_50m",
+  "grade_ahead_200m",
+  "curv_in_0.5s",
+  "curv_in_1.0s",
+  "curv_in_2.0s",
+  "curv_in_3.0s",
+  "grade_in_1.0s",
+  "time_to_corner_s",
+  "max_abs_curv_next_400m",
+  "dist_to_next_corner_m"
+ ],
+ "horizons_s": [
+  1.0,
+  2.0,
+  3.0,
+  4.0,
+  5.0
+ ],
+ "trained_on": [
+  [
+   11234,
+   "Melbourne",
+   150171
+  ],
+  [
+   11245,
+   "Shanghai",
+   96989
+  ],
+  [
+   11253,
+   "Suzuka",
+   174562
+  ],
+  [
+   11280,
+   "Miami",
+   150675
+  ],
+  [
+   11299,
+   "Monte Carlo",
+   27898
+  ],
+  [
+   11307,
+   "Catalunya",
+   148996
+  ],
+  [
+   11315,
+   "Spielberg",
+   157432
+  ],
+  [
+   11326,
+   "Silverstone",
+   170640
+  ],
+  [
+   11342,
+   "Hungaroring",
+   172734
+  ],
+  [
+   11353,
+   "Zandvoort",
+   182302
+  ],
+  [
+   11361,
+   "Monza",
+   212037
+  ]
+ ],
+ "validation_on": [
+  [
+   11291,
+   "Montreal",
+   175169
+  ],
+  [
+   11334,
+   "Spa-Francorchamps",
+   171882
+  ]
+ ],
+ "train_windows": 1644436,
+ "epochs": 8,
+ "stride": 3,
+ "validation_scores": {
+  "h1.00s": {
+   "n": 347051,
+   "model_mae": 0.9444,
+   "model_rmse": 1.7038,
+   "const_speed_mae": 3.565,
+   "const_speed_rmse": 6.2023,
+   "const_accel_mae": 1.6409,
+   "const_accel_rmse": 3.2244,
+   "best_baseline_mae": 1.6409,
+   "improvement_vs_best_baseline_pct": 42.45
+  },
+  "h2.00s": {
+   "n": 347051,
+   "model_mae": 2.0141,
+   "model_rmse": 3.4703,
+   "const_speed_mae": 6.7774,
+   "const_speed_rmse": 11.3822,
+   "const_accel_mae": 5.1702,
+   "const_accel_rmse": 9.2251,
+   "best_baseline_mae": 5.1702,
+   "improvement_vs_best_baseline_pct": 61.04
+  },
+  "h3.00s": {
+   "n": 347051,
+   "model_mae": 2.9365,
+   "model_rmse": 4.9825,
+   "const_speed_mae": 9.6071,
+   "const_speed_rmse": 15.5806,
+   "const_accel_mae": 9.7986,
+   "const_accel_rmse": 16.523,
+   "best_baseline_mae": 9.6071,
+   "improvement_vs_best_baseline_pct": 69.43
+  },
+  "h4.00s": {
+   "n": 347051,
+   "model_mae": 3.9082,
+   "model_rmse": 6.4397,
+   "const_speed_mae": 11.932,
+   "const_speed_rmse": 18.8529,
+   "const_accel_mae": 14.9757,
+   "const_accel_rmse": 24.5554,
+   "best_baseline_mae": 11.932,
+   "improvement_vs_best_baseline_pct": 67.25
+  },
+  "h5.00s": {
+   "n": 347051,
+   "model_mae": 5.3476,
+   "model_rmse": 8.5959,
+   "const_speed_mae": 13.6508,
+   "const_speed_rmse": 21.2392,
+   "const_accel_mae": 20.2749,
+   "const_accel_rmse": 32.9576,
+   "best_baseline_mae": 13.6508,
+   "improvement_vs_best_baseline_pct": 60.83
+  }
+ },
+ "reload_smoke_test_max_abs_diff": 1.9073486328125e-06,
+ "cuda_vs_cpu_numerics_gap_m_s": 0.01389014720916748,
+ "loco_reference": "reports/phase4_e8/loco_none.json",
+ "seconds": 343.9
+}

@@ -1,0 +1,27 @@
+{
+ "note": "60 s trial horizon, superseded by the zone models for deployment decisions but used for the attack/hold/defend call",
+ "feature_order": [
+  "intercept",
+  "gap_s",
+  "tyre_age_delta_laps"
+ ],
+ "preprocessing": "none",
+ "pass_60s": {
+  "coefficients": {
+   "intercept": -0.8405861024010692,
+   "gap_s": -1.9463537472006074,
+   "tyre_age_delta_laps": -0.08489712734227542
+  },
+  "target": "a pass of the car ahead within 60 s (overtakes feed)",
+  "n_train": 10716
+ },
+ "durable_pass_3laps": {
+  "coefficients": {
+   "intercept": -0.9764328657532347,
+   "gap_s": -2.244543745932602,
+   "tyre_age_delta_laps": -0.10726849697747781
+  },
+  "target": "passed within 60 s AND still ahead of that car 3 laps later, clean window only",
+  "n_train": 9169
+ }
+}

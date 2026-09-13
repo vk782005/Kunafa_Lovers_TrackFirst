@@ -1,0 +1,10 @@
+{
+ "name": "per-zone deploy decision",
+ "rule": "deploy iff (1-c)*gain_unmatched + c*gain_matched >= tau",
+ "gain_unmatched": "zone_pass_model(own_dep=1, rival_dep=0) - zone_pass_model(own_dep=0, rival_dep=0)",
+ "gain_matched": "zone_pass_model(own_dep=1, rival_dep=1) - zone_pass_model(own_dep=0, rival_dep=1)",
+ "c": "rival_cover_model output",
+ "tau_recommended": 0.04,
+ "tau_units": "probability of a pass, per deployment",
+ "note": "uses no information dated after the decision instant"
+}

@@ -35,6 +35,8 @@ The decision baseline is the calibrated `v4-logistic` model. The GPU forecaster 
 
 The accuracy and value scorecard is documented in [docs/model-evaluation.md](docs/model-evaluation.md). It defines grouped time-forward splits, pass and durable-pass labels, calibration and ranking metrics, physics fidelity checks, promotion gates, and the retrospective, shadow-mode, and prospective tests needed to prove race value.
 
+The reproducibility handoff is documented in [docs/FREEZE.md](docs/FREEZE.md). Read [docs/datasets.md](docs/datasets.md) for source provenance, labels, exported sessions, and known data limits, and [docs/model-handoff.md](docs/model-handoff.md) for the frozen model bundle, tensor interface, serving routes, and promotion policy. The model files are kept in `models/` and the canonical export inventory is `datasets/MANIFEST.json`.
+
 FastAPI serves both the frontend and GPU API through Vast's direct container `10200` to host `41138` mapping. The browser therefore uses relative same-origin URLs, with no CORS hop, localhost bridge, or SSH tunnel.
 
 ## Open the terminal

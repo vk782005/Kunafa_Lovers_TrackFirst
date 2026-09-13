@@ -1,0 +1,15 @@
+FORECASTER v1 - 2026 speed forecast, 1-5 s ahead
+==================================================
+Trained 2026-09-12 13:00 UTC on 11 races (1,644,436 windows), validated on Montreal, Spa-Francorchamps, 8 epochs.
+Features: ego kinematics + circuit geometry (26). No energy state (Phase 4 closed).
+
+   horizon   model MAE   const-speed   const-accel   improvement vs best baseline
+   h1.00s       0.944        3.565        1.641    +42.5%
+   h2.00s       2.014        6.777        5.170    +61.0%
+   h3.00s       2.937        9.607        9.799    +69.4%
+   h4.00s       3.908       11.932       14.976    +67.2%
+   h5.00s       5.348       13.651       20.275    +60.8%
+
+Reload smoke test (CPU, different batch size): max abs diff 1.91e-06; CUDA-vs-CPU numerics gap 1.39e-02 m/s
+Generalisation to an unseen circuit is the LOCO figure, not this: median +58 to +66 pct at 3-5 s (phase4/e8).
+Use: F.Forecaster(len(feats), 256); load state_dict; input (N, 12, 26) standardised by mu/sd; output = speed delta (m/s) at each horizon.

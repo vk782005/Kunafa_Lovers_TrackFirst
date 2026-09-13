@@ -1,0 +1,46 @@
+{
+ "name": "P(the car ahead deploys in this zone)",
+ "family": "logistic regression, L2 1e-2, Newton",
+ "target": "rival_dep: the car ahead drew >= 0.12 MJ in this zone (ESTIMATED)",
+ "feature_order": [
+  "intercept",
+  "rival_soc",
+  "rival_deploys_earlier",
+  "rival_prev_zone",
+  "rival_gap_ahead_of_them",
+  "gap",
+  "tyre_delta",
+  "len_km",
+  "is_last",
+  "lap_phase",
+  "zone_idx"
+ ],
+ "coefficients": {
+  "intercept": -1.940559726452234,
+  "rival_soc": -0.27364141130466757,
+  "rival_deploys_earlier": 0.6096490191848467,
+  "rival_prev_zone": 0.05772237959270659,
+  "rival_gap_ahead_of_them": -0.00991799169367214,
+  "gap": -0.2114018519558647,
+  "tyre_delta": -0.01166365647510053,
+  "len_km": 4.432492080111768,
+  "is_last": 1.679664114999441,
+  "lap_phase": -0.3868757212959778,
+  "zone_idx": -0.4455625799447156
+ },
+ "feature_definitions": {
+  "rival_soc": "car ahead's ESTIMATED SOC at zone entry, MJ; NaN -> 2.5",
+  "rival_deploys_earlier": "count of zones this lap where the car ahead already deployed",
+  "rival_prev_zone": "1 if the car ahead deployed at the previous zone of this lap; NaN -> 0.5",
+  "rival_gap_ahead_of_them": "the car ahead's own gap to the car in front of it, s, capped 5; NaN -> 5",
+  "gap": "our gap to them at zone entry, s",
+  "tyre_delta": "our tyre age minus theirs, laps",
+  "len_km": "zone length km",
+  "is_last": "final zone of the lap",
+  "lap_phase": "lap number / total laps",
+  "zone_idx": "index of the zone within the lap, 0-based"
+ },
+ "preprocessing": "none: raw units, NaN fills as stated",
+ "output": "probability the car ahead covers; used as c in the policy EV",
+ "n_train": 10726
+}

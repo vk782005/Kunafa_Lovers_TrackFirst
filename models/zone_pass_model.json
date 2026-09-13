@@ -1,0 +1,43 @@
+{
+ "name": "P(pass in this zone passage)",
+ "family": "logistic regression, L2 1e-2, Newton",
+ "target": "passed: this car passed the car that was ahead at zone entry, between zone entry and zone exit + 8 s (overtakes feed)",
+ "feature_order": [
+  "intercept",
+  "gap",
+  "tyre_delta",
+  "own_dep",
+  "rival_dep",
+  "own_x_norival",
+  "len_km",
+  "next_km",
+  "is_last",
+  "gap_x_owndep"
+ ],
+ "coefficients": {
+  "intercept": -0.7075777832923592,
+  "gap": -6.026485573777835,
+  "tyre_delta": -0.04895038433595806,
+  "own_dep": -0.13455035383372793,
+  "rival_dep": -0.11816067407748346,
+  "own_x_norival": 1.055251955308986,
+  "len_km": 1.5560826217886794,
+  "next_km": 0.1588318525718114,
+  "is_last": 0.4247931092675822,
+  "gap_x_owndep": 0.21790016690200298
+ },
+ "feature_definitions": {
+  "gap": "gap_entry, seconds to the car ahead at zone entry (intervals feed, latest reading)",
+  "tyre_delta": "own tyre age minus the car ahead's, laps (stints feed); NaN -> 0",
+  "own_dep": "1 if this car drew >= 0.12 MJ inside the zone (ESTIMATED), else 0",
+  "rival_dep": "same for the car ahead, same zone same lap (ESTIMATED); NaN -> 0",
+  "own_x_norival": "own_dep * (1 - rival_dep): the unmatched-deployment interaction",
+  "len_km": "zone length in km",
+  "next_km": "metres from this zone's exit to the next zone's entry, /1000, capped 6",
+  "is_last": "1 if this is the final zone of the lap",
+  "gap_x_owndep": "gap * own_dep"
+ },
+ "preprocessing": "none: raw units, no scaler, no encoder. NaN handling as stated per feature.",
+ "output": "probability in [0,1] via 1/(1+exp(-x.b)), x prefixed with a 1.0 intercept column",
+ "n_train": 10726
+}
