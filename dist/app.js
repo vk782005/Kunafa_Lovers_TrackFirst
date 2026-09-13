@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=85';
+import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=86';
 
 const $ = (id) => document.getElementById(id);
 // The race terminal and GPU API are served by the same FastAPI origin. A
