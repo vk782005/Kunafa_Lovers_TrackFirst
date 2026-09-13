@@ -329,3 +329,14 @@ body[data-view="delta"] .window-item.selected>span,body[data-view="delta"] .wind
 body[data-view="delta"] .window-item.complete>small{color:#5bce7e}
 body[data-view="delta"] .window-item.passed{opacity:.5}
 body[data-view="delta"] .overtake-cue{top:145px;right:12px;width:226px;box-shadow:none}
+
+/* Compact engineer rail: keep the information grouped and out of the
+   canvas while using the reserved column instead of floating over the lap. */
+body[data-view="delta"] .comparison-visual::after{background:linear-gradient(180deg,#0e1518 0%,#0a1012 55%,#0c1315 100%)}
+body[data-view="delta"] .window-list{right:12px;top:18px;width:226px;background:#0b1113;border-color:#465257}
+body[data-view="delta"] .window-list::before{content:"ACTIVE OVERTAKE WINDOW";color:#aeb8b6;border-color:#465257}
+body[data-view="delta"] .window-item{min-height:48px;background:#10171a;border-color:#2d383c}
+body[data-view="delta"] .window-item.selected{background:linear-gradient(90deg,#270812,#11171a);border-left-color:#e4002b}
+body[data-view="delta"] .comparison-telemetry{top:284px;right:12px;width:226px;background:transparent;border:0;box-shadow:none;gap:4px}
+body[data-view="delta"] .comparison-telemetry>span{padding:8px 9px;background:#10171a;border:1px solid #39464a}
+body[data-view="delta"] .comparison-time{top:394px;right:12px;width:226px;background:#10171a;border-color:#39464a}
