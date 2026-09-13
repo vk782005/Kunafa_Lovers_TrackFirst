@@ -29,7 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field
 DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else None
 API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
-SERVICE_VERSION = "overtiq-gpu-0.3.0"
+DECISION_MODEL_PATH = os.getenv("OVERTIQ_DECISION_MODEL", "/workspace/overtiq/pilot/decide_v4_coef.json")
+SERVICE_VERSION = "overtiq-gpu-0.4.1"
 FRONTEND_DIR = Path(os.getenv("OVERTIQ_FRONTEND_DIR", "/workspace/overtiq/frontend"))
 PRECOMPUTED_DIR = Path(os.getenv("OVERTIQ_PRECOMPUTED_DIR", "/workspace/overtiq/precomputed"))
 
@@ -47,6 +48,18 @@ TRACK_CATALOG = [
     {"id": "SGP", "name": "Marina Bay", "country": "Singapore", "length_m": 4940.0, "laps": 62},
 ]
 
+# Conditional probability that a completed pass is still held roughly three
+# laps later. These priors come from reports/counterattack.json: 4,239 pass
+# candidates across 31 races, measured at the nearest available 300 s window.
+# Track values pool all stored seasons for that circuit; the global prior is
+# used for tracks without enough observations.
+DURABILITY_PRIORS = {
+    "AUS": 1.0 - 113.0 / 235.0,
+    "MCO": 1.0 - 40.0 / 165.0,
+    "ITA": 1.0 - 167.0 / 381.0,
+}
+GLOBAL_DURABILITY_PRIOR = 1.0 - 0.3385
+
 # Simulation results are intentionally cached on the GPU service.  A browser
 # refresh or a transport reconnect must not launch a second Monte Carlo job for
 # the same race state.  The cache stores only compact response objects and is
@@ -57,6 +70,11 @@ _SIM_CACHE: OrderedDict[str, tuple[float, tuple[list[dict[str, Any]], dict[str, 
 _SIM_CACHE_LOCK = threading.RLock()
 _SIM_CACHE_HITS = 0
 _SIM_CACHE_MISSES = 0
+
+try:
+    DECISION_MODEL = json.loads(Path(DECISION_MODEL_PATH).read_text(encoding="utf-8"))
+except Exception:
+    DECISION_MODEL = {}
 
 
 def require_gpu() -> torch.device:
@@ -69,6 +87,40 @@ def require_gpu() -> torch.device:
 def auth_value(value: str | None) -> None:
     if API_KEY and value != API_KEY:
         raise HTTPException(status_code=401, detail="invalid GPU service key")
+
+
+def _v4_pass_probability(req: "SimulationRequest") -> float:
+    """Evaluate the validated v4 logistic baseline with request-time evidence.
+
+    Features unavailable in the live request use the training medians stored
+    with the model rather than invented zeroes. The physics layer applies
+    weather, tyre, action and neutralisation modifiers after calibration.
+    """
+    zone = DECISION_MODEL.get("zone") or {}
+    medians = dict(DECISION_MODEL.get("feature_medians") or {})
+    if not zone:
+        return 0.05
+    medians.update({
+        "gap": float(req.gap_ahead_s),
+        "soc_delta": float(req.ers_fraction) - 0.62 + float(medians.get("soc_delta", 0.0)),
+        "closing_rate_5s": float(medians.get("closing_rate_5s", 0.0)) +
+                           {"ATTACK": 0.025, "DEFEND": 0.0, "CONSERVE": -0.018, "RECOVER": -0.025}[req.decision],
+    })
+    logit = float(zone.get("intercept", 0.0))
+    for name in DECISION_MODEL.get("zone_features", []):
+        logit += float(zone.get(name, 0.0)) * float(medians.get(name, 0.0))
+    return max(1e-5, min(0.85, 1.0 / (1.0 + math.exp(-logit))))
+
+
+def _durability_probability(req: "SimulationRequest", grip: float, opponent_grip: float) -> float:
+    """Calibrate the hidden three-lap counterattack branch from race data."""
+    prior = DURABILITY_PRIORS.get(req.track_id.upper(), GLOBAL_DURABILITY_PRIOR)
+    condition_ratio = max(0.55, min(1.05, grip / max(opponent_grip, 1e-6)))
+    ers_adjustment = (float(req.ers_fraction) - 0.62) * 0.12
+    action_adjustment = {"ATTACK": 0.02, "DEFEND": 0.04, "CONSERVE": -0.03, "RECOVER": -0.05}[req.decision]
+    if req.vsc or req.safety_car or req.red_flag:
+        return 0.0
+    return max(0.05, min(0.95, prior * condition_ratio + ers_adjustment + action_adjustment))
 
 
 async def authenticated(x_overtiq_key: str | None = Header(default=None)) -> None:
@@ -207,15 +259,22 @@ def _conditions(req: SimulationRequest) -> dict[str, float | str]:
     else:
         water = rain
     compound = str(req.tire_compound or "MEDIUM").upper()
-    preferred = {"SOFT": 0.0, "MEDIUM": 0.04, "HARD": 0.08, "INTERMEDIATE": 0.48, "WET": 0.82}.get(compound, 0.04)
+    preferred = {"SOFT": 0.0, "MEDIUM": 0.03, "HARD": 0.06, "INTERMEDIATE": 0.45, "WET": 0.82}.get(compound, 0.03)
     mismatch = abs(water - preferred)
-    # Slicks aquaplane in water; rain tyres lose some performance on a dry line.
-    grip = max(0.34, 1.0 - mismatch * (1.35 if water > 0.18 else 0.72))
-    if compound in {"INTERMEDIATE", "WET"} and water < 0.18:
-        grip *= 0.82
-    if compound == "WET" and water < 0.55:
-        grip *= 0.88
-    return {"weather": weather, "rain": water, "grip": max(0.25, min(1.0, grip))}
+    # Water lowers the circuit's absolute grip even on the correct tyre. Tyre
+    # selection then applies a second compatibility penalty. This prevents a
+    # wet scenario from becoming faster than a dry one merely because the wet
+    # compound matches the water level.
+    surface_grip = 1.0 - 0.36 * water
+    tyre_fit = 1.0 - mismatch * (1.55 if water > 0.18 else 0.82)
+    if compound in {"SOFT", "MEDIUM", "HARD"} and water > 0.35:
+        tyre_fit -= (water - 0.35) * 0.72
+    if compound == "INTERMEDIATE" and water > 0.78:
+        tyre_fit -= (water - 0.78) * 0.8
+    if compound == "WET" and water < 0.45:
+        tyre_fit -= (0.45 - water) * 0.62
+    grip = surface_grip * max(0.32, tyre_fit)
+    return {"weather": weather, "rain": water, "grip": max(0.24, min(0.99, grip)), "surface_grip": surface_grip, "tyre_fit": max(0.32, tyre_fit)}
 
 
 def _track(s: torch.Tensor, length: float) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -281,12 +340,15 @@ def _simulate_gpu_uncached(req: SimulationRequest, include_frames: bool = True) 
     grip = float(conditions["grip"])
     rain = float(conditions["rain"])
     dt = float(req.dt)
-    # The state update and all scenario branches remain on CUDA.
-    n = 1 if include_frames else min(req.n_scenarios, 1024)
+    # The state update and every requested Monte Carlo branch remain on CUDA.
+    # Frame generation samples branch zero but never changes the sample count;
+    # before/after probabilities therefore use identical statistical depth.
+    n = int(req.n_scenarios)
     # A durable-pass answer needs to observe three laps after the pass. We
     # still return only the requested replay horizon as frames, but run the
     # hidden continuation on CUDA so durability is based on simulated state.
-    sim_horizon_s = max(float(req.horizon_s), 92.0 * 3.0 + 5.0)
+    lap_time_s = 92.0
+    sim_horizon_s = max(float(req.horizon_s), 60.0 + lap_time_s * 3.0 + 5.0)
     loop_dt = dt if include_frames else max(dt, 0.5)
     steps = max(1, min(int(sim_horizon_s / loop_dt), 2400))
     speed = torch.full((n,), float(req.speed_mps), device=device)
@@ -294,54 +356,99 @@ def _simulate_gpu_uncached(req: SimulationRequest, include_frames: bool = True) 
     gap = torch.full((n,), float(req.gap_ahead_s), device=device)
     battery = torch.full((n,), float(req.ers_fraction), device=device)
     fuel = torch.full((n,), float(req.fuel_kg), device=device)
-    opp_speed = torch.full((n,), float(req.speed_mps - 0.3), device=device)
+    opp_speed = torch.full((n,), float(req.speed_mps - 0.05), device=device)
     pass_event = torch.zeros((n,), dtype=torch.bool, device=device)
     pass_time = torch.full((n,), float("inf"), device=device)
     durable = torch.zeros((n,), dtype=torch.bool, device=device)
+    relative_distance = gap * opp_speed
     frames: list[dict[str, Any]] = []
     action_bias = {"ATTACK": 0.34, "DEFEND": -0.16, "CONSERVE": -0.32, "RECOVER": -0.48}[req.decision]
+    action_pace = {"ATTACK": 0.22, "DEFEND": -0.10, "CONSERVE": -0.34, "RECOVER": -0.48}[req.decision]
     # Fuel mass and ERS deployment are scenario inputs, so they alter the
     # vehicle state instead of being display-only controls.
     mass_factor = max(0.82, min(1.0, 1.0 - (float(req.fuel_kg) - 42.0) * 0.002))
     pace_factor = max(0.58, min(1.0, 0.78 + 0.22 * grip))
+    opponent_grip = max(0.52, 1.0 - rain * 0.32)
     speed_cap = 94.0 * pace_factor
-    opp_speed_cap = 92.0 * pace_factor
+    opp_speed_cap = 94.0 * max(0.58, min(1.0, 0.78 + 0.22 * opponent_grip))
+    calibrated_zone_probability = _v4_pass_probability(req)
+    action_multiplier = {"ATTACK": 1.15, "DEFEND": 0.76, "CONSERVE": 0.52, "RECOVER": 0.42}[req.decision]
+    condition_multiplier = min(1.0, (grip / max(opponent_grip, 1e-6)) ** 2) * (1.0 - rain * 0.48)
+    target_pass60 = max(0.0, min(0.85, calibrated_zone_probability * action_multiplier * condition_multiplier))
+    if req.vsc or req.safety_car or req.red_flag:
+        target_pass60 = 0.0
+    durability_probability = _durability_probability(req, grip, opponent_grip)
+    pass_hazard_per_s = -math.log(max(1e-8, 1.0 - target_pass60)) / 60.0 if target_pass60 else 0.0
+    # Per-branch latent pace represents driver execution, traffic and car
+    # balance. The mean is deliberately slightly opponent-favouring at the
+    # observed 0.56 s gap; an attack is possible but never guaranteed.
+    relative_pace = (-0.48 + action_pace + (grip - opponent_grip) * 8.0 +
+                     (float(req.ers_fraction) - 0.62) * 1.8 - (float(req.fuel_kg) - 42.0) * 0.018 +
+                     torch.randn((n,), device=device) * 0.62)
+    # A single, seeded counterattack outcome is sampled for each branch. It is
+    # evaluated only for cars that pass inside 60 s, preserving the definition
+    # P(pass within 60 s AND still ahead after three laps).
+    retention_draw = torch.rand((n,), device=device) < durability_probability
     start = torch.cuda.Event(enable_timing=True); end = torch.cuda.Event(enable_timing=True)
     start.record()
     for i in range(steps):
         t = i * loop_dt
         phase = (s / req.track_length_m) * (2.0 * math.pi)
         curvature = 0.0006 + 0.0042 * torch.sin(2.0 * phase + 0.5).abs() + 0.0024 * torch.sin(5.0 * phase).abs()
-        noise = torch.randn((n,), device=device) * 0.065
+        noise = torch.randn((n,), device=device) * 0.12
         throttle = torch.clamp((0.84 + action_bias - curvature * 17.0 + noise * 0.1) * (0.78 + 0.22 * grip), 0.08, 1.0)
         brake = torch.clamp(curvature * 15.0 - 0.02, 0.0, 0.9)
-        drag = 0.0019 * speed * speed
-        accel = (4.0 * throttle - 7.8 * brake - drag + noise) * mass_factor + 0.75 * battery
+        corner_target = torch.clamp(speed_cap - curvature * 3400.0, 38.0, speed_cap)
+        opponent_target = torch.clamp(opp_speed_cap - curvature * 3300.0, 38.0, opp_speed_cap)
+        accel = torch.clamp((corner_target + relative_pace - speed) * 0.46 + noise, -7.5, 4.2) * mass_factor
         if req.vsc or req.safety_car:
-            accel = torch.minimum(accel, torch.full_like(accel, 0.75))
+            accel = torch.clamp((torch.full_like(speed, 51.0) - speed) * 0.8, -8.0, 1.2)
         if req.red_flag:
             # A red flag freezes racing and brings both cars to pit-lane pace.
             accel = -speed * 0.75
         speed = torch.clamp(speed + accel * loop_dt, 0.0 if req.red_flag else 34.0, min(speed_cap, 55.0) if (req.vsc or req.safety_car) else speed_cap)
-        opp_accel = (3.55 - 0.0019 * opp_speed * opp_speed) * mass_factor
+        # The opponent is assumed to be on a competent race-engineer tyre
+        # choice. Rain therefore reduces visibility and absolute grip without
+        # granting the subject car a free pace advantage.
+        opponent_noise = torch.randn((n,), device=device) * 0.11
+        opp_accel = torch.clamp((opponent_target - opp_speed) * 0.46 + opponent_noise, -7.5, 4.2)
+        if req.vsc or req.safety_car:
+            opp_accel = torch.clamp((torch.full_like(opp_speed, 50.8) - opp_speed) * 0.8, -8.0, 1.2)
         if req.red_flag:
             opp_accel = -opp_speed * 0.75
         opp_speed = torch.clamp(opp_speed + opp_accel * loop_dt, 0.0 if req.red_flag else 34.0, min(opp_speed_cap, 53.0) if (req.vsc or req.safety_car) else opp_speed_cap)
-        closing = (speed - opp_speed) * loop_dt * 0.065
-        gap = torch.clamp(gap - closing - action_bias * loop_dt * 0.012 + torch.randn((n,), device=device) * 0.004, 0.04, 12.0)
+        relative_distance = relative_distance - (speed - opp_speed) * loop_dt
+        gap = relative_distance / torch.clamp(opp_speed, min=1.0)
         s = s + speed * loop_dt
         battery = torch.clamp(battery - (0.0005 + throttle * 0.0007) * loop_dt + (brake * 0.0004) * loop_dt, 0.05, 1.0)
         fuel = torch.clamp(fuel - (0.00037 * speed + throttle * 0.012) * loop_dt * (0.12 if req.red_flag else 1.0), 0.0, 110.0)
-        p_pass = torch.sigmoid(2.2 - 1.45 * gap + 0.022 * (speed - opp_speed) + action_bias * 2.4 - curvature * 85.0) * (loop_dt / 60.0) * grip * (1.0 - rain * 0.35)
+        zone_wave = torch.sin(phase * 3.0 + 0.7)
+        overtake_window = torch.clamp((zone_wave + 0.38) * 1.45, 0.08, 1.0)
+        pace_advantage = torch.clamp(speed - opp_speed, -6.0, 8.0)
+        # Normalise the zone weighting around one so the integrated 60-second
+        # hazard remains anchored to the calibrated v4 probability.
+        zone_weight = 0.55 + overtake_window * 0.9
+        p_pass = torch.full_like(gap, pass_hazard_per_s * loop_dt) * zone_weight
         if req.vsc or req.safety_car:
-            p_pass = p_pass * 0.05
+            p_pass = torch.zeros_like(p_pass)
         if req.red_flag:
             p_pass = torch.zeros_like(p_pass)
-        fresh_pass = (~pass_event) & (torch.rand((n,), device=device) < p_pass)
+        race_active = not (req.vsc or req.safety_car or req.red_flag)
+        physical_overlap = race_active & (relative_distance <= -5.5)
+        opportunity_pass = race_active & (gap < 2.5) & (torch.rand((n,), device=device) < p_pass)
+        fresh_pass = (~pass_event) & (physical_overlap | opportunity_pass)
         pass_event |= fresh_pass
         pass_time = torch.where(fresh_pass, torch.full_like(pass_time, t), pass_time)
-        if t >= 92.0 * 3.0:
-            durable |= pass_event & (gap < 1.8)
+        relative_distance = torch.where(fresh_pass, torch.minimum(relative_distance, torch.full_like(relative_distance, -5.5)), relative_distance)
+        durability_due = pass_event & (t >= pass_time + lap_time_s * 3.0)
+        # The counterattack model is calibrated on observed 300 s outcomes.
+        # Keep the hidden race state consistent with the sampled result before
+        # recording durability at the three-lap checkpoint.
+        retained_due = durability_due & retention_draw
+        repassed_due = durability_due & (~retention_draw)
+        relative_distance = torch.where(retained_due, torch.minimum(relative_distance, torch.full_like(relative_distance, -2.0)), relative_distance)
+        relative_distance = torch.where(repassed_due, torch.maximum(relative_distance, torch.full_like(relative_distance, 2.0)), relative_distance)
+        durable |= retained_due
         if include_frames and t <= req.horizon_s and (i % max(1, int(0.25 / loop_dt)) == 0):
             frames.append(_frame(t, s[0], speed[0], gap[0], battery[0], fuel[0], req, i))
     end.record(); end.synchronize()
@@ -353,10 +460,14 @@ def _simulate_gpu_uncached(req: SimulationRequest, include_frames: bool = True) 
     gain = torch.where(within_3, torch.ones_like(s), torch.zeros_like(s))
     finish = torch.clamp(torch.as_tensor(float(req.position), device=device) - gain - durable.float() * 0.35 + torch.randn((n,), device=device) * 0.7, 1, 20)
     probs = {"gain3": float(within_3.float().mean().item()), "pass60": float(within_60.float().mean().item()), "durable": float(durable.float().mean().item())}
+    standard_error = {name: math.sqrt(max(value * (1.0 - value), 0.0) / n) for name, value in probs.items()}
     quantiles = torch.quantile(finish, torch.as_tensor([0.1, 0.25, 0.5, 0.75, 0.9], device=device)).detach().cpu().tolist()
     return frames, {"probs": probs, "finish": {"expected": float(finish.mean().item()), "quantiles": quantiles}, "gpu_ms": gpu_ms, "scenarios": n,
+                    "monte_carlo_standard_error": standard_error, "calibrated_zone_probability": calibrated_zone_probability,
+                    "physics_adjusted_pass60": target_pass60, "conditional_durability_probability": durability_probability,
                     "final_speed_mps": float(speed.mean().item()), "final_gap_s": float(gap.mean().item()), "final_ers": float(battery.mean().item()),
-                    "final_fuel_kg": float(fuel.mean().item()), "conditions": {"weather": conditions["weather"], "rain_intensity": rain, "grip_factor": grip, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag}}
+                    "final_fuel_kg": float(fuel.mean().item()), "conditions": {"weather": conditions["weather"], "rain_intensity": rain, "grip_factor": grip,
+                    "surface_grip": conditions["surface_grip"], "tyre_fit": conditions["tyre_fit"], "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag}}
 
 
 def _simulation_cache_key(req: SimulationRequest, include_frames: bool) -> str:
@@ -427,7 +538,7 @@ def assess(req: SimulationRequest, include_frames: bool = False) -> dict[str, An
                        "durable_pass": {"probability": p["durable"], "confidence": conf, "laps_ahead": 3, "evidence": evidence(req, stats, "durable pass")},
                        "finish_position": {"expected": stats["finish"]["expected"], "distribution": stats["finish"]["quantiles"], "quantiles": [0.1, 0.25, 0.5, 0.75, 0.9], "evidence": evidence(req, stats, "race finish")}},
             "recommendation": {"action": recommendation, "confidence": conf, "rationale": f"{p['pass60']:.0%} modeled pass chance in the active zone; {p['durable']:.0%} remains ahead three laps later." if not req.red_flag else "Red flag active: racing is neutralized and the model holds position.", "override_allowed": True},
-            "model": {"decision_baseline": "v4-logistic", "forecaster": FORECASTER.version, "forecaster_output": {"horizons_s": [1, 2, 3, 4, 5], "predicted_speed_mps": forecast}, "simulator": SERVICE_VERSION, "device": torch.cuda.get_device_name(0), "gpu_ms": stats["gpu_ms"], "scenarios": stats["scenarios"]},
+            "model": {"decision_baseline": "v4-logistic", "decision_validation": DECISION_MODEL.get("zone_loco"), "calibrated_zone_probability": stats["calibrated_zone_probability"], "physics_adjusted_pass60": stats["physics_adjusted_pass60"], "forecaster": FORECASTER.version, "forecaster_output": {"horizons_s": [1, 2, 3, 4, 5], "predicted_speed_mps": forecast}, "simulator": SERVICE_VERSION, "device": torch.cuda.get_device_name(0), "gpu_ms": stats["gpu_ms"], "scenarios": stats["scenarios"], "monte_carlo_standard_error": stats["monte_carlo_standard_error"]},
             "state": {"gap_ahead_s": req.gap_ahead_s, "speed_kph": req.speed_mps * 3.6, "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "weather": req.weather, "rain_intensity": req.rain_intensity, "tire_compound": req.tire_compound, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag, "conditions": stats.get("conditions"), "data_quality": "simulated_gpu"},
             "frames": frames if include_frames else None}
 
@@ -514,14 +625,15 @@ def engineer_assess(body: AssessmentRequest) -> dict[str, Any]:
 def engineer_bootstrap(body: AssessmentRequest) -> dict[str, Any]:
     """Serve the immutable baseline artifact; calculate it only once per track."""
     request = body.request
-    baseline_path = PRECOMPUTED_DIR / f"baseline_{request.track_id.upper()}.json"
+    baseline_path = PRECOMPUTED_DIR / f"baseline_{request.track_id.upper()}_{SERVICE_VERSION}.json"
     if baseline_path.is_file():
         payload = json.loads(baseline_path.read_text(encoding="utf-8"))
         payload["served_from"] = "precomputed"
         return payload
 
-    assessment = assess(request, include_frames=False)
-    frames, _ = simulate_gpu(request, include_frames=True)
+    assessment = assess(request, include_frames=True)
+    frames = assessment.pop("frames") or []
+    assessment["frames"] = None
     payload = {"schema": "EngineerBootstrap.v1", "gpu": {"available": True, "device": torch.cuda.get_device_name(0),
             "model": FORECASTER.version}, "assessment": assessment, "frames": frames,
             "zones": zone_rows_from_assessment(assessment), "request_count": 0,

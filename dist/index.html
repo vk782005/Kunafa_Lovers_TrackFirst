@@ -14,7 +14,7 @@
   </header>
   <main>
     <section class="titlebar">
-      <div><div class="eyebrow">ROUND 03 <span>/</span> AUSTRALIA <span>/</span> 2026_11361</div><h1>Live race <span>command</span></h1><p>Albert Park Circuit <span>•</span> Ocon 31 · engineer channel</p></div>
+      <div><div id="session-eyebrow" class="eyebrow">ROUND 03 <span>/</span> AUSTRALIA <span>/</span> 2026_11361</div><h1>Live race <span>command</span></h1><p id="session-circuit">Albert Park Circuit <span>•</span> Ocon 31 · engineer channel</p></div>
       <div class="session-meta"><span id="data-badge" class="tag">GPU LINK PENDING</span><span id="data-note" class="meta-note">Race engineer decision workspace</span></div>
     </section>
     <section class="compute-strip" aria-label="Remote compute status"><div><span class="compute-dot"></span><small>SIMULATION CORE</small><b id="compute-sim">REMOTE · CUDA</b></div><div><span class="compute-dot"></span><small>PHYSICS ENGINE</small><b id="compute-physics">OVERTIQ GPU</b></div><div><span class="compute-dot"></span><small>DECISION MODEL</small><b id="compute-model">V4 BASELINE</b></div><div><span class="compute-dot"></span><small>TELEMETRY</small><b id="compute-telemetry">WAITING</b></div><div><span class="compute-dot"></span><small>GPU TIME</small><b id="compute-latency">—</b></div><div><span class="compute-dot"></span><small>GPU REQUESTS</small><b id="compute-requests">WAITING</b></div></section>
@@ -36,6 +36,6 @@
     <section class="playback"><div class="timeline-heading"><span class="eyebrow">LIVE RACE TIMELINE</span><span id="timeline-event" class="event-key"><i></i> GPU PHYSICS FRAMES</span><span id="time-label">00:00 <span>/ 01:00</span></span></div><div class="timeline"><input id="timeline" type="range" min="0" max="60" step="0.25" value="0" aria-label="Race position in seconds"></div><div class="timeline-ticks"><span>L35</span><span>ZONE T1</span><span>ZONE T3</span><span>ZONE T9</span><span>L38</span></div><div class="transport"><div class="transport-left"><button id="reset" class="icon-button" aria-label="Restart race stream" title="Restart race stream">↶</button><button id="back" class="icon-button" aria-label="Back five seconds" title="Back five seconds">−5</button><button id="play" class="play-button" aria-label="Play race stream">▶</button><button id="forward" class="icon-button" aria-label="Forward five seconds" title="Forward five seconds">+5</button><span class="transport-divider"></span><label for="rate" class="muted">SPEED</label><select id="rate" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></div><span class="keyboard-hint"><kbd>SPACE</kbd> play / pause <span>← →</span> seek</span><button id="live-stream" class="event-button active" type="button" disabled>BASELINE LOADING</button></div></section>
     <footer><span>TRACKFIRST <span class="muted">/ OVERTIQ RACE ENGINEER</span></span><span id="footer-status">REMOTE GPU CALCULATIONS · LOCAL DISPLAY</span></footer>
   </main>
-<script type="module" src="app.js?v=21"></script>
+<script type="module" src="app.js?v=24"></script>
 </body>
 </html>

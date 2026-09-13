@@ -2,7 +2,7 @@ export const TRACKS = {
   AUS: {
     id: 'AUS', name: 'Albert Park', country: 'AUSTRALIA', round: '03', sessionKey: '2026_11361', lengthM: 5278, laps: 58,
     profile: 'Stop-start street circuit with short traction exits and three practical passing windows.',
-    geometry: [[300,-15],[230,45],[155,165],[70,245],[-85,230],[-220,135],[-255,0],[-190,-150],[-40,-205],[120,-190],[245,-120],[300,-15]],
+    geometry: [[-36.8,-112.6],[-56.9,-93.4],[-88.1,-63.8],[-105.7,-45.9],[-109.8,-34.3],[-106.1,-11.7],[-112.9,9.0],[-140.8,35.9],[-160.9,56.2],[-180.5,79.1],[-192.2,94.5],[-209.0,119.3],[-217.1,133.6],[-217.0,143.8],[-206.3,149.7],[-186.1,153.2],[-175.7,165.6],[-175.9,179.9],[-178.7,197.9],[-174.9,225.8],[-160.0,240.9],[-133.0,257.8],[-100.4,272.2],[-79.3,283.4],[-58.3,285.0],[-33.4,273.1],[-5.5,266.3],[21.1,244.5],[31.8,221.5],[37.0,198.0],[36.9,163.7],[29.8,135.9],[17.1,101.3],[10.6,64.1],[15.1,35.2],[24.4,12.4],[47.2,-18.6],[75.9,-43.1],[98.4,-49.7],[130.3,-50.3],[151.3,-67.0],[166.1,-79.4],[190.0,-102.4],[204.8,-128.2],[216.1,-160.2],[224.6,-186.7],[231.8,-218.9],[226.0,-228.3],[208.3,-233.5],[181.7,-240.1],[158.4,-244.2],[138.6,-228.1],[126.9,-204.7],[117.9,-189.2],[110.7,-185.3],[103.0,-189.2],[95.7,-200.2],[78.9,-210.6],[61.9,-206.6],[44.3,-191.2],[31.5,-178.7],[7.9,-155.5],[-13.1,-135.1],[-37.6,-111.8]],
     zones: [
       { id:'T1', sector:1, type:'Braking', position:.02, approach:'Turn 1 braking', side:'Inside', note:'Heavy stop after the pit straight.' },
       { id:'T3', sector:1, type:'Overtake', position:.18, approach:'Turn 3', side:'Inside', note:'Primary DRS pass window; late braking is viable.' },
@@ -37,14 +37,15 @@ export const TRACKS = {
     ]
   },
   ITA: {
-    id: 'ITA', name: 'Monza', country: 'ITALY', round: '16', sessionKey: '2026_ITA', lengthM: 5793, laps: 53,
-    profile: 'Slipstream circuit with four heavy stops and a high penalty for poor exit alignment.',
-    geometry: [[300,-70],[275,45],[205,160],[75,225],[-85,220],[-225,165],[-270,50],[-220,-95],[-95,-195],[45,-215],[190,-175],[285,-105],[300,-70]],
+    id: 'ITA', name: 'Monza', country: 'ITALY', round: '15', sessionKey: '2026_11361', lengthM: 5793, laps: 53,
+    profile: 'Measured Ocon race line from Monza: long slipstream straights, two chicanes and three high-value braking decisions.',
+    geometry: [[-147.7,134.6],[-145.8,113.1],[-143.9,91.5],[-142.0,70.0],[-140.2,48.4],[-138.3,26.9],[-136.5,5.3],[-134.6,-16.2],[-132.8,-37.8],[-131.0,-59.3],[-123.7,-78.1],[-120.9,-96.5],[-124.6,-117.7],[-124.7,-139.3],[-121.6,-160.7],[-113.8,-180.8],[-100.6,-197.8],[-83.1,-210.4],[-63.0,-218.3],[-41.7,-222.1],[-20.2,-224.1],[1.4,-225.6],[23.0,-226.6],[44.5,-228.3],[61.0,-241.3],[82.0,-246.4],[102.4,-253.6],[123.0,-260.0],[142.3,-252.7],[148.3,-232.2],[150.0,-210.6],[151.0,-189.1],[137.6,-173.4],[118.4,-163.4],[99.5,-152.9],[80.7,-142.2],[62.6,-130.4],[45.9,-116.6],[29.6,-102.4],[13.3,-88.3],[-3.1,-74.1],[-19.4,-59.9],[-35.7,-45.7],[-51.3,-30.7],[-54.2,-9.5],[-64.8,8.9],[-72.9,28.6],[-75.0,50.1],[-77.0,71.7],[-79.0,93.2],[-81.0,114.7],[-82.9,136.3],[-84.9,157.8],[-86.9,179.4],[-88.9,200.9],[-91.0,222.4],[-94.4,243.8],[-107.4,260.0],[-128.1,257.1],[-142.5,241.4],[-149.4,221.0],[-151.0,199.4],[-150.5,177.8],[-149.3,156.2]],
     zones: [
-      { id:'T1', sector:1, type:'Overtake', position:.03, approach:'Rettifilo', side:'Inside', note:'Primary pass; highest closing-speed variance.' },
-      { id:'T4', sector:2, type:'Overtake', position:.25, approach:'Roggia', side:'Inside', note:'Requires clean exit from the first chicane.' },
-      { id:'T8', sector:2, type:'Braking', position:.48, approach:'Ascari', side:'Inside', note:'Track position is worth more than entry risk.' },
-      { id:'T11', sector:3, type:'Overtake', position:.72, approach:'Parabolica', side:'Inside', note:'Exit and DRS run decide the next lap.' }
+      { id:'T1', sector:1, type:'Overtake', position:.131, approach:'Variante del Rettifilo', side:'Inside', note:'Primary DRS pass: Ocon brakes from 301 to 90 km/h here.' },
+      { id:'T4', sector:1, type:'Overtake', position:.348, approach:'Variante della Roggia', side:'Inside', note:'Second major pass: measured braking falls from 259 to 118 km/h.' },
+      { id:'T6', sector:2, type:'Braking', position:.419, approach:'Lesmo 1', side:'Inside', note:'Short stability-sensitive brake phase before the second Lesmo.' },
+      { id:'T8', sector:2, type:'Braking', position:.662, approach:'Variante Ascari', side:'Inside', note:'High-speed braking and exit alignment control the run to Parabolica.' },
+      { id:'T11', sector:3, type:'Overtake', position:.871, approach:'Curva Alboreto', side:'Inside', note:'Late-braking opportunity; exit quality determines the finish-line attack.' }
     ]
   },
   GBR: {
@@ -59,13 +60,15 @@ export const TRACKS = {
     ]
   },
   MCO: {
-    id: 'MCO', name: 'Monaco', country: 'MONACO', round: '08', sessionKey: '2026_MCO', lengthM: 3337, laps: 78,
-    profile: 'Track-position circuit where qualifying gap and traffic risk outweigh raw pace.',
-    geometry: [[275,-10],[210,45],[230,150],[95,215],[-45,185],[-230,210],[-280,105],[-180,10],[-245,-110],[-120,-200],[20,-160],[145,-220],[255,-125],[275,-10]],
+    id: 'MCO', name: 'Monaco', country: 'MONACO', round: '08', sessionKey: '2025_9979', lengthM: 3337, laps: 78,
+    profile: 'Measured Ocon race line through Monaco, where position, braking precision and traffic matter more than raw pace.',
+    geometry: [[-203.0,70.7],[-201.4,43.2],[-196.9,15.9],[-188.5,-10.3],[-164.4,-20.5],[-136.9,-23.6],[-110.0,-29.7],[-83.2,-36.4],[-56.1,-41.4],[-29.3,-47.4],[-4.0,-58.4],[22.5,-66.2],[49.7,-70.4],[75.1,-80.5],[89.7,-103.0],[84.2,-129.8],[69.1,-152.7],[68.2,-179.0],[84.7,-201.0],[101.6,-222.9],[118.1,-245.0],[140.2,-256.7],[151.3,-232.1],[165.9,-209.2],[165.0,-227.1],[163.7,-250.1],[189.2,-260.0],[203.0,-240.2],[200.9,-212.7],[197.8,-185.3],[191.5,-158.5],[181.7,-132.7],[169.0,-108.2],[150.2,-88.3],[126.0,-75.0],[101.3,-62.7],[76.3,-50.9],[50.4,-41.4],[23.4,-35.7],[-4.0,-32.2],[-25.7,-17.4],[-53.1,-18.4],[-80.5,-15.2],[-107.9,-12.0],[-135.4,-9.7],[-160.1,0.6],[-173.3,24.5],[-178.0,51.7],[-172.5,78.1],[-160.5,102.8],[-154.5,129.7],[-153.2,157.2],[-159.5,182.8],[-149.0,208.2],[-130.3,228.1],[-108.9,244.6],[-126.5,260.0],[-152.6,254.6],[-162.0,228.9],[-176.3,205.3],[-185.8,179.4],[-193.2,152.8],[-198.6,125.7],[-201.6,98.3]],
     zones: [
-      { id:'T1', sector:1, type:'Overtake', position:.06, approach:'Sainte Devote', side:'Inside', note:'Rare clean chance; pit strategy often safer.' },
-      { id:'T10', sector:2, type:'Braking', position:.46, approach:'Nouvelle Chicane', side:'Inside', note:'Traffic and yellow flags dominate risk.' },
-      { id:'T11', sector:3, type:'Overtake', position:.69, approach:'Portier', side:'Inside', note:'Requires a mistake ahead; tunnel exit is decisive.' }
+      { id:'T1', sector:1, type:'Overtake', position:.015, approach:'Sainte Devote', side:'Inside', note:'Best conventional chance; measured braking falls from 265 to 120 km/h.' },
+      { id:'T5', sector:1, type:'Overtake', position:.303, approach:'Mirabeau Haute', side:'Inside', note:'Low-speed overlap is possible, but the narrow exit makes it high risk.' },
+      { id:'T6', sector:2, type:'Braking', position:.352, approach:'Fairmont Hairpin', side:'Inside', note:'Slowest measured brake phase, falling to 51 km/h; passing needs cooperation.' },
+      { id:'T10', sector:2, type:'Overtake', position:.588, approach:'Nouvelle Chicane', side:'Inside', note:'Main tunnel-exit attempt; Ocon brakes from 278 to 74 km/h.' },
+      { id:'T18', sector:3, type:'Braking', position:.844, approach:'La Rascasse', side:'Inside', note:'Heavy low-speed braking, normally a pressure rather than clean-pass zone.' }
     ]
   },
   BEL: {
