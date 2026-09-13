@@ -155,9 +155,9 @@ function renderComparison() {
   const before = state.beforeAssessment || null, after = state.assessment || null;
   const summary = (a) => { const x = a?.answers || {}; return { pass: x.can_pass_within_60s?.probability ?? null, durable: x.durable_pass?.probability ?? null, gain: x.can_gain_position_within_3_laps?.probability ?? null, finish: x.finish_position?.expected ?? null, action: a?.recommendation?.action || '—' }; };
   const b = summary(before), n = summary(after), delta = (x, y) => Math.round((y - x) * 100);
-  $('before-action').textContent = b.action; $('before-pass').textContent = fmtPct(b.pass); $('before-durable').textContent = fmtPct(b.durable); $('before-finish').textContent = b.finish == null ? '—' : 'P' + Number(b.finish).toFixed(1);
-  $('after-action').textContent = n.action; $('after-pass').textContent = fmtPct(n.pass); $('after-durable').textContent = fmtPct(n.durable); $('after-finish').textContent = n.finish == null ? '—' : 'P' + Number(n.finish).toFixed(1);
-  $('scenario-delta').textContent = b.pass == null || n.pass == null ? 'WAITING FOR GPU BASELINE' : 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + (n.finish - b.finish).toFixed(1) + ' places' : '—');
+  $('before-action').textContent = b.action; $('before-pass').textContent = fmtPct(b.pass); $('before-durable').textContent = fmtPct(b.durable); $('before-finish').textContent = b.finish == null ? '—' : 'P' + Math.round(Number(b.finish));
+  $('after-action').textContent = n.action; $('after-pass').textContent = fmtPct(n.pass); $('after-durable').textContent = fmtPct(n.durable); $('after-finish').textContent = n.finish == null ? '—' : 'P' + Math.round(Number(n.finish));
+  $('scenario-delta').textContent = b.pass == null || n.pass == null ? 'WAITING FOR GPU BASELINE' : 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + Math.round(n.finish - b.finish) + ' places' : '—');
   $('before-condition').textContent = conditionLabel(state.beforeControls);
   $('after-condition').textContent = conditionLabel(state.controls);
   const setImpact = (name, baseValue, adjustedValue, format, deltaFormat) => {
@@ -308,7 +308,7 @@ function renderAssessment() {
     $('answer-' + id).textContent = pct; $('bar-' + id).style.width = (item.probability || 0) * 100 + '%';
     const e = item.evidence || {}; $('evidence-' + id).textContent = [e.zone || 'active zone', e.gap_s != null ? e.gap_s.toFixed(2) + 's gap' : '', e.speed_kph ? Math.round(e.speed_kph) + ' km/h' : '', e.simulator || ''].filter(Boolean).join(' · ');
   });
-  const finish = answers.finish_position || {}; $('finish-expected').textContent = finish.expected == null ? '—' : 'P' + Number(finish.expected).toFixed(1);
+  const finish = answers.finish_position || {}; $('finish-expected').textContent = finish.expected == null ? '—' : 'P' + Math.round(Number(finish.expected));
   $('finish-note').textContent = a?.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'Waiting for the remote GPU assessment.';
   const vals = finish.distribution || [];
   $('finish-bars').innerHTML = vals.map((value, i) => '<div class="finish-bar"><span>P' + Number(value).toFixed(0) + '</span><i style="width:' + Math.max(12, 100 - i * 15) + '%"></i></div>').join('');
@@ -817,7 +817,7 @@ async function applyScenario() {
     const elapsed = Math.round(performance.now() - started); setStatus('READY', true); $('compute-latency').textContent = elapsed + ' MS';
     $('compute-requests').textContent = state.requestCount + ' AFTER RUN' + (state.requestCount === 1 ? '' : 'S'); renderAssessment(); renderComparison(); renderZones(); renderFrame();
     const ans = result.answers || {}; const cond = [state.controls.weather, state.controls.tire_compound, state.controls.vsc ? 'VSC' : '', state.controls.red_flag ? 'RED FLAG' : ''].filter(Boolean).join(' · ');
-    $('scenario-result').className = 'scenario-result success'; $('scenario-result').textContent = 'COMPLETE · ' + elapsed + ' ms · ' + (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Number(ans.finish_position.expected).toFixed(1)) + (cond ? ' · ' + cond : '');
+    $('scenario-result').className = 'scenario-result success'; $('scenario-result').textContent = 'COMPLETE · ' + elapsed + ' ms · ' + (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Math.round(Number(ans.finish_position.expected))) + (cond ? ' · ' + cond : '');
     $('sim-state').innerHTML = '<i class="live-dot"></i> COMPLETE · ADJUSTED SCENARIO LOADED';
     startPlaybackFromStart();
   }).catch(error => { setStatus('GPU ERROR', false); $('scenario-result').className = 'scenario-result failed'; $('scenario-result').textContent = 'FAILED · ' + error.message; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO FAILED'; }).finally(() => { state.assessmentPromise = null; $('apply-scenario').disabled = false; $('apply-scenario').textContent = 'APPLY TO GPU SIMULATOR'; });
