@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrackShift Scenario Demonstrator</title>
+<style>
+:root {
+  --bg: #0a1020;
+  --surface: #111a2e;
+  --surface-2: #17233d;
+  --line: #2b3b5e;
+  --text: #eff5ff;
+  --muted: #96a5c0;
+  --blue: #67a7ff;
+  --cyan: #61e3df;
+  --orange: #ffb35c;
+  --red: #ff6d7a;
+  --green: #65df9a;
+  --purple: #c597ff;
+  --yellow: #f3dc70;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: radial-gradient(circle at top right, #172749 0, var(--bg) 45%);
+  color: var(--text); font: 14px/1.45 Inter, Segoe UI, Arial, sans-serif;
+}
+main { max-width: 1420px; margin: 0 auto; padding: 24px; }
+header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:20px; }
+h1 { margin:0 0 5px; font-size:30px; letter-spacing:-.6px; }
+h2 { font-size:15px; margin:0 0 12px; color:var(--muted); font-weight:600; letter-spacing:.3px; text-transform:uppercase; }
+p { margin:0; color:var(--muted); }
+.controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end; }
+select, button, input[type=range] {
+  font: inherit;
+}
+select, button {
+  border:1px solid var(--line); background:var(--surface-2); color:var(--text);
+  border-radius:8px; padding:9px 12px; cursor:pointer;
+}
+button:hover, select:hover { border-color:var(--blue); }
+button.primary { background:var(--blue); color:#081021; border-color:var(--blue); font-weight:700; }
+label { color:var(--muted); font-size:12px; }
+.control-group { display:flex; flex-direction:column; gap:4px; min-width:200px; }
+input[type=range] { width:280px; accent-color:var(--blue); }
+.statusline { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.pill { padding:4px 8px; border-radius:999px; background:var(--surface-2); color:var(--muted); border:1px solid var(--line); font-size:12px; }
+.pill.good { color:var(--green); border-color:#2d7755; }
+.pill.warn { color:var(--yellow); border-color:#806e2f; }
+.pill.bad { color:var(--red); border-color:#813746; }
+.grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin:16px 0; }
+.card { background:rgba(17,26,46,.88); border:1px solid var(--line); border-radius:12px; padding:14px; }
+.metric-label { color:var(--muted); font-size:12px; }
+.metric-value { font-size:24px; font-variant-numeric:tabular-nums; margin-top:4px; }
+.metric-note { color:var(--muted); font-size:11px; margin-top:2px; }
+.layout { display:grid; grid-template-columns:minmax(0, 1.35fr) minmax(330px, .65fr); gap:14px; }
+.chart-card { padding:12px 14px 14px; }
+.chart-wrap { width:100%; overflow:hidden; }
+svg.chart { width:100%; height:230px; display:block; }
+svg.chart text { fill:var(--muted); font-size:11px; }
+.axis { stroke:var(--line); stroke-width:1; }
+.gridline { stroke:#243452; stroke-width:1; stroke-dasharray:3 5; }
+.cursor { stroke:var(--yellow); stroke-width:2; stroke-dasharray:4 4; }
+.line-speed { stroke:var(--blue); }
+.line-source { stroke:#7483a0; stroke-dasharray:5 4; }
+.line-ice { stroke:var(--orange); }
+.line-mguk { stroke:var(--cyan); }
+.line-request { stroke:var(--purple); stroke-dasharray:5 4; }
+.line-energy { stroke:var(--green); }
+.line-battery { stroke:var(--red); }
+.line-gap { stroke:var(--purple); }
+.event-detection { stroke:var(--yellow); stroke-dasharray:2 3; }
+.event-activation { stroke:var(--green); stroke-dasharray:2 3; }
+.legend { display:flex; flex-wrap:wrap; gap:10px; color:var(--muted); font-size:11px; margin:5px 0 0 50px; }
+.legend span { display:inline-flex; align-items:center; gap:5px; }
+.swatch { display:inline-block; width:18px; height:3px; border-radius:2px; }
+.flow { display:flex; align-items:stretch; gap:5px; overflow-x:auto; padding:6px 0 12px; }
+.flow-node { min-width:112px; padding:10px; border-radius:10px; background:var(--surface-2); border:1px solid var(--line); }
+.flow-node strong { display:block; font-size:12px; }
+.flow-node small { display:block; color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums; }
+.flow-node.active { border-color:var(--cyan); box-shadow:0 0 0 1px rgba(97,227,223,.22); }
+.flow-node.charging { border-color:var(--green); }
+.flow-node.blocked { border-color:var(--red); }
+.arrow { align-self:center; color:var(--muted); font-size:20px; }
+.rule-box { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+.rule { background:var(--surface-2); border-radius:8px; padding:9px; border:1px solid var(--line); }
+.rule strong { display:block; font-size:12px; }
+.rule span { color:var(--muted); font-size:11px; }
+.rule.active { border-color:var(--green); }
+.rule.blocked { border-color:var(--red); }
+.detail { min-height:34px; color:var(--muted); }
+.detail strong { color:var(--text); }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th, td { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; }
+th { color:var(--muted); font-weight:600; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.compare { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.compare div { padding:10px; background:var(--surface-2); border-radius:8px; }
+.compare b { display:block; font-size:20px; font-variant-numeric:tabular-nums; }
+footer { margin-top:16px; color:var(--muted); font-size:11px; }
+@media (max-width: 960px) {
+  header { flex-direction:column; }
+  .controls { justify-content:flex-start; }
+  .layout { grid-template-columns:1fr; }
+  .grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+  main { padding:14px; }
+  h1 { font-size:24px; }
+  .grid { grid-template-columns:1fr 1fr; gap:8px; }
+  .metric-value { font-size:19px; }
+  input[type=range] { width:100%; }
+  .control-group { min-width:100%; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div>
+    <div class="statusline"><span class="pill good">PHYSICAL DEMO MODE</span><span class="pill">0.25 s fixed step</span></div>
+    <h1>TrackShift Scenario Demonstrator</h1>
+    <p>One decision engine, five repeatable scenarios, and an inspectable powertrain response.</p>
+  </div>
+  <div class="controls">
+    <div class="control-group">
+      <label for="scenario">Scenario</label>
+      <select id="scenario">
+        <option value="none">No overtake</option>
+        <option value="eligible">Eligible and activated</option>
+        <option value="blocked">AI request blocked by rules</option>
+        <option value="harvest">Braking harvest</option>
+        <option value="lowenergy">Low-energy governor</option>
+        <option value="safety">Safety-car disable</option>
+      </select>
+    </div>
+    <button id="play" class="primary" type="button">Play</button>
+    <button id="reset" type="button">Reset</button>
+  </div>
+</header>
+
+<section class="grid" aria-live="polite">
+  <div class="card"><div class="metric-label">Current time</div><div id="m-time" class="metric-value">0.00 s</div><div id="m-phase" class="metric-note">Scenario ready</div></div>
+  <div class="card"><div class="metric-label">Mode</div><div id="m-mode" class="metric-value">HOLD</div><div id="m-decision" class="metric-note">AI request 0 kW</div></div>
+  <div class="card"><div class="metric-label">Battery energy</div><div id="m-energy" class="metric-value">-- MJ</div><div id="m-soc" class="metric-note">SOC --</div></div>
+  <div class="card"><div class="metric-label">MGU-K output</div><div id="m-power" class="metric-value">0 kW</div><div id="m-torque" class="metric-note">Torque 0 Nm</div></div>
+</section>
+
+<div class="layout">
+  <div>
+    <section class="card chart-card">
+      <h2>Powertrain energy flow</h2>
+      <div class="flow">
+        <div id="node-ice" class="flow-node"><strong>ICE</strong><small id="f-ice">0 kW</small></div>
+        <div class="arrow">→</div>
+        <div class="flow-node"><strong>Transmission</strong><small id="f-wheel">0 kW wheel</small></div>
+        <div class="arrow">←</div>
+        <div id="node-mguk" class="flow-node"><strong>MGU-K</strong><small id="f-mguk">HOLD · 0 kW</small></div>
+        <div class="arrow">↔</div>
+        <div id="node-battery" class="flow-node"><strong>Energy Store</strong><small id="f-battery">0 kW</small></div>
+      </div>
+      <div class="rule-box">
+        <div id="r-enabled" class="rule"><strong>Overtake enabled</strong><span id="r-enabled-value">NO</span></div>
+        <div id="r-activated" class="rule"><strong>Overtake activated</strong><span id="r-activated-value">NO</span></div>
+        <div id="r-allowed" class="rule"><strong>Deployment allowed</strong><span id="r-allowed-value">NO</span></div>
+        <div id="r-reason" class="rule"><strong>Gate reason</strong><span id="r-reason-value">READY</span></div>
+      </div>
+    </section>
+    <section class="card chart-card">
+      <h2>Speed response</h2>
+      <div class="chart-wrap"><svg id="speed-chart" class="chart" role="img" aria-label="Source, baseline and TrackShift speed over time"></svg></div>
+      <div class="legend"><span><i class="swatch" style="background:var(--blue)"></i>TrackShift</span><span><i class="swatch" style="background:#7483a0"></i>Source</span><span><i class="swatch" style="background:var(--orange)"></i>ICE power</span><span><i class="swatch" style="background:var(--cyan)"></i>MGU-K power</span></div>
+    </section>
+    <section class="card chart-card">
+      <h2>Battery and commanded power</h2>
+      <div class="chart-wrap"><svg id="energy-chart" class="chart" role="img" aria-label="Battery energy, MGU-K request and actual command over time"></svg></div>
+      <div class="legend"><span><i class="swatch" style="background:var(--green)"></i>ES energy</span><span><i class="swatch" style="background:var(--purple)"></i>AI request</span><span><i class="swatch" style="background:var(--red)"></i>Actual battery power</span></div>
+    </section>
+  </div>
+  <div>
+    <section class="card">
+      <h2>Playback position</h2>
+      <input id="time" type="range" min="0" max="360" value="0" step="1" aria-label="Scenario time">
+      <div id="detail" class="detail">Move the timeline or press Play.</div>
+    </section>
+    <section class="card">
+      <h2>Decision and rules</h2>
+      <table>
+        <tbody>
+          <tr><th>Speed</th><td id="d-speed" class="num">--</td></tr>
+          <tr><th>Gap ahead</th><td id="d-gap" class="num">--</td></tr>
+          <tr><th>AI score</th><td id="d-score" class="num">--</td></tr>
+          <tr><th>P(success)</th><td id="d-success" class="num">--</td></tr>
+          <tr><th>Regulatory limit</th><td id="d-reg" class="num">--</td></tr>
+          <tr><th>Requested power</th><td id="d-request" class="num">--</td></tr>
+          <tr><th>Actual power</th><td id="d-actual" class="num">--</td></tr>
+          <tr><th>Blocking reason</th><td id="d-reason">--</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Baseline versus TrackShift</h2>
+      <div class="compare">
+        <div><span class="metric-label">Baseline energy used</span><b id="c-base-energy">--</b><span class="metric-note">MJ</span></div>
+        <div><span class="metric-label">TrackShift energy used</span><b id="c-ts-energy">--</b><span class="metric-note">MJ</span></div>
+        <div><span class="metric-label">Baseline final reserve</span><b id="c-base-reserve">--</b><span class="metric-note">MJ</span></div>
+        <div><span class="metric-label">TrackShift final reserve</span><b id="c-ts-reserve">--</b><span class="metric-note">MJ</span></div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>What this proves</h2>
+      <p class="detail">The AI can request power, but the rule gate and energy governor decide what the hardware is allowed to execute. Positive MGU-K power discharges the Energy Store. Negative MGU-K power harvests energy during braking.</p>
+    </section>
+  </div>
+</div>
+<footer>Engineering demonstrator only. Regulatory curves and physical parameters are configurable placeholders; this is not an FIA compliance-certified model.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  const dt = 0.25;
+  const N = 361;
+  const CAPACITY_MJ = 14.4;
+  const E_MIN_MJ = CAPACITY_MJ * 0.20;
+  const E_MAX_MJ = CAPACITY_MJ * 0.95;
+  const SWING_MJ = 4.0;
+  const RECHARGE_LIMIT_MJ = 8.5;
+  const ETA_INV = 0.97;
+  const ETA_MGU = 0.96;
+  const DEPLOY_REQUEST = 275;
+  const HARVEST_REQUEST = 120;
+  const POWER_CAP = 350;
+  const detections = [0.19, 0.50, 0.78];
+  const activations = [0.23, 0.54, 0.82];
+
+  const $ = id => document.getElementById(id);
+  const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+  const fmt = (x, d=2) => Number.isFinite(x) ? x.toFixed(d) : '--';
+  const sigmoid = x => 1 / (1 + Math.exp(-x));
+
+  let activeScenario = 'none';
+  let data = null;
+  let baseline = null;
+  let currentIndex = 0;
+  let playing = false;
+  let timer = null;
+
+  function baseTelemetry(scenario) {
+    const t = [], sourceSpeed = [], distance = [], throttle = [], brake = [], gap = [], rel = [], straight = [], braking = [];
+    let d = 0;
+    for (let i = 0; i < N; i++) {
+      const time = i * dt;
+      let speed = 220 + 34*Math.sin(2*Math.PI*time/38) + 16*Math.sin(2*Math.PI*time/17);
+      speed -= 42*Math.exp(-Math.pow((time-18)/2.4, 2));
+      speed -= 38*Math.exp(-Math.pow((time-48)/2.8, 2));
+      speed -= 45*Math.exp(-Math.pow((time-75)/2.7, 2));
+      speed = clamp(speed, 80, 330);
+      if (scenario === 'harvest') speed -= 6*Math.exp(-Math.pow((time-50)/10, 2));
+      sourceSpeed.push(speed);
+      t.push(time);
+      if (i > 0) d += sourceSpeed[i-1] / 3.6 * dt;
+      distance.push(d);
+      const accel = i === 0 ? 0 : (sourceSpeed[i]-sourceSpeed[i-1]) / 3.6 / dt;
+      const br = clamp(-accel/7.5, 0, 1);
+      const nearBrake = [0.23,0.54,0.82].some(f => Math.abs(d - f*5400) < 280);
+      brake.push(Math.max(br, nearBrake ? 0.65 : 0));
+      throttle.push(clamp(0.58 + 0.18*Math.sin(2*Math.PI*time/31) + (accel > 0 ? 0.12 : 0), .1, .98));
+      gap.push(1.55);
+      rel.push(3);
+      straight.push(speed > 215 && br < .20);
+      braking.push(brake[i] > .25 || nearBrake);
+    }
+    const lapLength = distance[N-1];
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < detections.length; j++) {
+        const closeness = Math.exp(-0.5*Math.pow((distance[i]-detections[j]*lapLength)/(0.045*lapLength), 2));
+        if (scenario === 'eligible' || scenario === 'lowenergy') {
+          if (j === 0 || j === 2) gap[i] -= 0.88*closeness;
+        } else if (scenario === 'blocked') {
+          gap[i] -= 0.32*closeness;
+        } else if (scenario === 'safety') {
+          gap[i] -= 0.88*closeness;
+        }
+        if (j !== 1) rel[i] += 12*closeness;
+      }
+      gap[i] = clamp(gap[i] + .03*Math.sin(2*Math.PI*t[i]/9), .35, 2);
+      rel[i] = clamp(rel[i] - 8*brake[i], -20, 25);
+    }
+    if (scenario === 'eligible' || scenario === 'lowenergy') {
+      for (let i=0; i<N; i++) {
+        const inActivationWindow = activations.some(f => Math.abs(distance[i]-f*lapLength) < 170);
+        if (inActivationWindow) {
+          brake[i] = Math.min(brake[i], .08);
+          braking[i] = false;
+          straight[i] = true;
+        }
+      }
+    }
+    return {t, sourceSpeed, distance, throttle, brake, gap, rel, straight, braking, lapLength};
+  }
+
+  function regulatoryLimit(speed, activated) {
+    if (activated) return POWER_CAP;
+    if (speed < 340) return clamp(1800 - 5*speed, 0, POWER_CAP);
+    if (speed < 345) return 100 * (345-speed)/5;
+    return 0;
+  }
+
+  function gateAt(state, telem, k, scenario) {
+    const pos = telem.distance[k];
+    const enabled = scenario !== 'safety' || !(telem.t[k] >= 22 && telem.t[k] <= 38);
+    const event = Math.min(state.event, detections.length-1);
+    const dLine = detections[event] * telem.lapLength;
+    const aLine = activations[event] * telem.lapLength;
+    const crossedD = state.lastPos <= dLine && pos >= dLine;
+    const crossedA = state.lastPos <= aLine && pos >= aLine;
+    if (!enabled) {
+      state.latched = false; state.active = false;
+      state.reason = 'Race-control disable';
+    } else {
+      if (crossedD) state.latched = telem.gap[k] < .90;
+      if (state.latched && crossedA) state.active = true;
+      if (state.active && pos > aLine + 450) {
+        state.event = Math.min(state.event + 1, detections.length-1);
+        state.latched = false; state.active = false;
+      }
+      if (state.active) state.reason = 'ACTIVATED';
+      else if (state.latched) state.reason = 'Waiting for Activation Line';
+      else state.reason = 'Detection not latched';
+    }
+    state.lastPos = pos;
+    return {
+      enabled: Number(enabled), activated: Number(enabled && state.active),
+      allowed: Number(enabled && state.active), reason: state.reason,
+      limit: regulatoryLimit(3.6*telem.sourceSpeed[k], Number(enabled && state.active)),
+      event: state.event
+    };
+  }
+
+  function simulate(scenario, mode) {
+    const telem = baseTelemetry(scenario);
+    const t = telem.t;
+    const initial = scenario === 'lowenergy' ? 4.0 : 11.52;
+    let e = initial, high = e, low = e, harvested = 0, v = telem.sourceSpeed[0]/3.6, s = 0;
+    const state = {lastPos:0, event:0, latched:false, active:false, reason:'Ready'};
+    const out = {
+      t, speed:[], ice:[], mguk:[], request:[], actual:[], batteryPower:[],
+      energy:[], soc:[], voltage:[], current:[], torque:[], gap:telem.gap,
+      score:[], success:[], reg:[], enabled:[], activated:[], allowed:[],
+      decision:[], reason:[], wheel:[], rpm:[]
+    };
+    for (let k = 0; k < N; k++) {
+      const gate = gateAt(state, telem, k, scenario);
+      const speed = 3.6*v;
+      const braking = telem.braking[k], brake = telem.brake[k];
+      const straight = telem.straight[k];
+      let pSuccess = clamp(sigmoid(1.6*(1-telem.gap[k]) + .08*Math.max(telem.rel[k],0) + .45*Number(straight) - .25),0,1);
+      const timeGain = Math.max(0, .10 + .01*Math.max(telem.rel[k],0) + .35*pSuccess + .08*Number(straight));
+      const risk = clamp(.25 + .20*Number(speed>290) + .18*Number(braking) + .10*Math.max(telem.gap[k]-.8,0),0,1);
+      let score = clamp(.50 + .55*(pSuccess*timeGain - .60*risk - .25*(DEPLOY_REQUEST*dt/1000) + .50*(.15+.60*Number(straight)+.50*pSuccess-.20*Number(braking))),0,1);
+      if ((scenario === 'eligible' || scenario === 'lowenergy') && gate.activated) {
+        pSuccess = Math.max(pSuccess, .78);
+        score = Math.max(score, .72);
+      }
+      let decision = 0;
+      if (mode === 'baseline') {
+        if (gate.allowed && straight && e-E_MIN_MJ>.15) decision = 1;
+        else if (braking && brake >= .22 && gate.enabled) decision = -1;
+      } else if (mode === 'trackshift') {
+        if (scenario === 'blocked' && gate.enabled && !gate.allowed && telem.gap[k] < 1.6) decision = 1;
+        else if (gate.allowed && score >= .58 && pSuccess >= .55 && e-E_MIN_MJ>.15) decision = 1;
+        else if (braking && brake >= .22 && gate.enabled) decision = -1;
+      } else if (mode === 'harvest') {
+        if (braking && gate.enabled) decision = -1;
+      }
+      const requested = decision * (decision > 0 ? DEPLOY_REQUEST : HARVEST_REQUEST);
+      const omega = Math.max(1, v/.33*3.5*.9);
+      const physical = Math.min(POWER_CAP, 500*omega/1000);
+      let actual = 0, reason = gate.reason;
+      if (requested > 0) {
+        const minE = Math.max(E_MIN_MJ, high-SWING_MJ);
+        const energyLimit = Math.max(0, e-minE)*1000/dt*ETA_INV*ETA_MGU;
+        if (!gate.allowed) { actual = 0; reason = gate.reason; }
+        else { actual = Math.min(requested, gate.limit, physical, energyLimit); if (actual < requested) reason = 'Power or energy governor limited'; }
+      } else if (requested < 0 && gate.enabled) {
+        const maxE = Math.min(E_MAX_MJ, low+SWING_MJ);
+        const chargeLimit = Math.max(0, maxE-e)*1000/dt/(ETA_INV*ETA_MGU);
+        const rechargeLimit = Math.max(0, RECHARGE_LIMIT_MJ-harvested)*1000/dt/ETA_INV;
+        actual = -Math.min(Math.abs(requested), 180, physical, chargeLimit, rechargeLimit);
+        if (actual === 0) reason = 'Recharge or ES limit reached';
+      } else if (requested !== 0) {
+        reason = 'External disable';
+      }
+      const pBattery = actual >= 0 ? actual/ETA_INV : actual*ETA_INV;
+      const voc = 400*(.95+.10*clamp(e/CAPACITY_MJ,0,1));
+      const current = pBattery*1000/Math.max(voc,50);
+      const voltage = Math.max(50, voc - .08*current);
+      const rpm = clamp(v/.33*3.5*.9*60/(2*Math.PI), 4000, 12000);
+      const torqueICE = (rpm < 6000 ? 700+(rpm-4000)*.01 : rpm < 8000 ? 720-(rpm-6000)*.02 : 680-(rpm-8000)*.04) * telem.throttle[k]*(1-brake);
+      const pIce = torqueICE*rpm*2*Math.PI/60*.96/1000;
+      const torqueMGU = clamp((actual >= 0 ? actual*ETA_MGU : actual/ETA_MGU)*1000/omega,-500,500);
+      const pMguMech = torqueMGU*omega/1000;
+      const pWheel = pIce+pMguMech;
+      const drag = .5*1.225*1.35*v*v, roll=.015*900*9.81, grade=900*9.81*.012*Math.sin(2*Math.PI*telem.distance[k]/telem.lapLength);
+      const accel = clamp((pWheel*1000/Math.max(v,1)-drag-roll-grade-brake*18000)/900,-12,12);
+      const eNext = clamp(e-pBattery*dt/1000,E_MIN_MJ,E_MAX_MJ);
+      const harvestedNext = Math.min(RECHARGE_LIMIT_MJ, harvested+Math.max(-pBattery,0)*dt/1000);
+      high = Math.max(high,eNext); low = Math.min(low,eNext); e=eNext; harvested=harvestedNext;
+      out.speed.push(3.6*v); out.ice.push(pIce); out.mguk.push(pMguMech); out.request.push(requested); out.actual.push(actual);
+      out.batteryPower.push(pBattery); out.energy.push(e); out.soc.push(100*e/CAPACITY_MJ); out.voltage.push(voltage); out.current.push(current);
+      out.torque.push(torqueMGU); out.score.push(score); out.success.push(pSuccess); out.reg.push(gate.limit); out.enabled.push(gate.enabled);
+      out.activated.push(gate.activated); out.allowed.push(gate.allowed); out.decision.push(decision); out.reason.push(reason); out.wheel.push(pWheel); out.rpm.push(rpm);
+      v = Math.max(0, v+accel*dt); s += v*dt;
+    }
+    out.energyUsed = out.batteryPower.reduce((a,x)=>a+Math.max(x,0),0)*dt/1000;
+    out.energyHarvested = out.batteryPower.reduce((a,x)=>a+Math.max(-x,0),0)*dt/1000;
+    out.finalReserve = out.energy[N-1];
+    out.peakPower = Math.max(...out.actual.map(Math.abs));
+    out.peakTorque = Math.max(...out.torque.map(Math.abs));
+    return out;
+  }
+
+  function path(values, x0, y0, w, h, minY, maxY, maxX) {
+    return values.map((v,i) => {
+      const x=x0+(i/(values.length-1))*w;
+      const y=y0+h-(clamp(v,minY,maxY)-minY)/(maxY-minY)*h;
+      return (i?'L':'M')+x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+  }
+
+  function chart(svg, series, labels, cursor, markerLines) {
+    const W=760,H=230,L=48,R=14,T=14,B=28,w=W-L-R,h=H-T-B;
+    const maxX=(data && data.t) ? data.t[data.t.length-1] : (series[0].values.length-1)*dt;
+    let all=[]; series.forEach(s => all.push(...s.values));
+    let minY=Math.min(...all), maxY=Math.max(...all);
+    if (minY===maxY) { minY-=1; maxY+=1; }
+    const pad=(maxY-minY)*.10; minY-=pad; maxY+=pad;
+    let html='<rect x="'+L+'" y="'+T+'" width="'+w+'" height="'+h+'" fill="none" class="axis"/>';
+    for (let i=0;i<=4;i++) {
+      const y=T+h-i*h/4, val=minY+(maxY-minY)*i/4;
+      html+='<line x1="'+L+'" x2="'+(L+w)+'" y1="'+y+'" y2="'+y+'" class="gridline"/>';
+      html+='<text x="'+(L-7)+'" y="'+(y+4)+'" text-anchor="end">'+fmt(val,1)+'</text>';
+    }
+    html+='<text x="'+L+'" y="'+(H-5)+'">0 s</text><text x="'+(L+w)+'" y="'+(H-5)+'" text-anchor="end">'+fmt(maxX,0)+' s</text>';
+    series.forEach(s => { html+='<path d="'+path(s.values,L,T,w,h,minY,maxY,maxX)+'" fill="none" stroke-width="2" class="'+s.cls+'"/>'; });
+    if (markerLines) markerLines.forEach(m => {
+      const x=L+m.max/maxX*w;
+      html+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(T+h)+'" class="'+m.kind+'"/>';
+      html+='<text x="'+(x+4)+'" y="'+(T+12)+'">'+m.label+'</text>';
+    });
+    const cx=L+cursor/(series[0].values.length-1)*w;
+    html+='<line x1="'+cx+'" x2="'+cx+'" y1="'+T+'" y2="'+(T+h)+'" class="cursor"/>';
+    svg.innerHTML=html;
+  }
+
+  function eventMarkers(telem) {
+    const markers=[];
+    for (let i=0;i<detections.length;i++) {
+      let dT=telem.distance.findIndex(d=>d>=detections[i]*telem.lapLength);
+      let aT=telem.distance.findIndex(d=>d>=activations[i]*telem.lapLength);
+      if (dT>=0) markers.push({max:telem.t[dT], kind:'event-detection', label:'D'+(i+1)});
+      if (aT>=0) markers.push({max:telem.t[aT], kind:'event-activation', label:'A'+(i+1)});
+    }
+    return markers;
+  }
+
+  function render() {
+    const k=currentIndex, o=data, b=baseline;
+    const reason=o.reason[k];
+    const mode=o.decision[k] > 0 ? 'DEPLOY' : o.decision[k] < 0 ? 'HARVEST' : 'HOLD';
+    $('m-time').textContent=fmt(o.t[k],2)+' s';
+    $('m-phase').textContent=reason;
+    $('m-mode').textContent=mode;
+    $('m-decision').textContent='AI request '+fmt(o.request[k],0)+' kW';
+    $('m-energy').textContent=fmt(o.energy[k],2)+' MJ';
+    $('m-soc').textContent='SOC '+fmt(o.soc[k],1)+'% · '+(o.batteryPower[k]>=0?'discharging':'charging');
+    $('m-power').textContent=fmt(o.actual[k],0)+' kW';
+    $('m-torque').textContent='Torque '+fmt(o.torque[k],0)+' Nm';
+    $('f-ice').textContent=fmt(o.ice[k],0)+' kW · '+fmt(o.rpm[k],0)+' RPM';
+    $('f-wheel').textContent=fmt(o.wheel[k],0)+' kW wheel';
+    $('f-mguk').textContent=mode+' · '+fmt(o.mguk[k],0)+' kW mech';
+    $('f-battery').textContent=fmt(o.batteryPower[k],0)+' kW · '+fmt(o.voltage[k],0)+' V';
+    $('node-ice').className='flow-node '+(mode==='DEPLOY'?'active':'');
+    $('node-mguk').className='flow-node '+(mode==='DEPLOY'?'active':mode==='HARVEST'?'charging':reason.includes('blocked')?'blocked':'');
+    $('node-battery').className='flow-node '+(mode==='HARVEST'?'charging':mode==='DEPLOY'?'active':'');
+    const rules=[['r-enabled','r-enabled-value',o.enabled[k],'YES','NO'],['r-activated','r-activated-value',o.activated[k],'YES','NO'],['r-allowed','r-allowed-value',o.allowed[k],'YES','NO']];
+    rules.forEach(x=>{ $(x[0]).className='rule '+(x[2]?'active':'blocked'); $(x[1]).textContent=x[2]?x[3]:x[4]; });
+    $('r-reason').className='rule '+(o.allowed[k]||mode==='HARVEST'?'active':'blocked');
+    $('r-reason-value').textContent=reason;
+    $('d-speed').textContent=fmt(o.speed[k],1)+' km/h';
+    $('d-gap').textContent=fmt(o.gap[k],2)+' s';
+    $('d-score').textContent=fmt(o.score[k],3);
+    $('d-success').textContent=fmt(o.success[k]*100,1)+'%';
+    $('d-reg').textContent=fmt(o.reg[k],0)+' kW';
+    $('d-request').textContent=fmt(o.request[k],0)+' kW';
+    $('d-actual').textContent=fmt(o.actual[k],0)+' kW';
+    $('d-reason').textContent=reason;
+    $('detail').innerHTML='<strong>'+mode+'</strong> at '+fmt(o.t[k],2)+' s: requested '+fmt(o.request[k],0)+' kW, executed '+fmt(o.actual[k],0)+' kW. '+reason+'.';
+    $('time').value=k;
+    chart($('speed-chart'),[
+      {values:o.speed,cls:'line-speed'},{values:telemSource.sourceSpeed,cls:'line-source'},
+      {values:o.ice,cls:'line-ice'},{values:o.mguk,cls:'line-mguk'}
+    ],[],o.t[k],eventMarkers(telemSource));
+    chart($('energy-chart'),[
+      {values:o.energy,cls:'line-energy'},{values:o.request,cls:'line-request'},{values:o.batteryPower,cls:'line-battery'}
+    ],[],o.t[k],[]);
+  }
+
+  let telemSource = null;
+  function loadScenario() {
+    activeScenario=$('scenario').value;
+    telemSource=baseTelemetry(activeScenario);
+    baseline=simulate(activeScenario,'baseline');
+    data=simulate(activeScenario,'trackshift');
+    currentIndex=0;
+    $('time').max=N-1;
+    render();
+    $('c-base-energy').textContent=fmt(baseline.energyUsed,2);
+    $('c-ts-energy').textContent=fmt(data.energyUsed,2);
+    $('c-base-reserve').textContent=fmt(baseline.finalReserve,2);
+    $('c-ts-reserve').textContent=fmt(data.finalReserve,2);
+  }
+
+  $('scenario').addEventListener('change', loadScenario);
+  $('time').addEventListener('input', e=>{currentIndex=Number(e.target.value); render();});
+  $('reset').addEventListener('click', ()=>{currentIndex=0; playing=false; clearInterval(timer); $('play').textContent='Play'; render();});
+  $('play').addEventListener('click', ()=>{
+    playing=!playing; $('play').textContent=playing?'Pause':'Play';
+    clearInterval(timer);
+    if (playing) timer=setInterval(()=>{currentIndex=(currentIndex+1)%N; render();}, 45);
+  });
+  try {
+    loadScenario();
+  } catch (error) {
+    console.error(error);
+    $('detail').textContent = 'Startup error: ' + error.message;
+  }
+})();
+</script>
+</body>
+</html>

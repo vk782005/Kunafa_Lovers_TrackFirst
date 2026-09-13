@@ -6,3 +6,11 @@ node_modules/
 *.key
 
 .stage2/
+
+# MATLAB / Simulink generated caches and scratch files
+slprj/
+*.slxc
+.matlab_pref/
+report_render*/
+TS_BlockTest*.slx
+handover_export/
