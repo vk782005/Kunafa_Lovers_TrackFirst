@@ -513,8 +513,11 @@ function showcaseOvertakeZones() {
   // Keep the opening phase clear, then show two distinct race windows. This
   // gives both runs room to start behind the target before an overtake occurs.
   const meaningful = zones.filter(zone => zone.position >= .1);
-  if (meaningful.length >= 2) return meaningful.slice(0, 2);
-  return zones.slice(0, 2);
+  return (meaningful.length ? meaningful : zones).slice(0, 1);
+}
+function runTargetZone(side = 'after', zones = showcaseOvertakeZones()) {
+  if (!zones.length) return null;
+  return zones[side === 'before' ? 0 : (state.runSerial + 1) % zones.length];
 }
 
 function overtakeMotion(frame, side = 'after') {
@@ -522,14 +525,18 @@ function overtakeMotion(frame, side = 'after') {
   const flags = frame.flags || {}, race = frame.race || {};
   const action = race.decision || state.decision || 'HOLD';
   const gapS = Number(race.gap_ahead_s ?? 99);
-  if (action !== 'ATTACK' || flags.red_flag || flags.vsc || flags.safety_car || gapS > 1.2) return null;
+  if (flags.red_flag || flags.vsc || flags.safety_car) return null;
   const windows = showcaseOvertakeZones();
-  const firstZone = windows[side === 'before' ? 0 : (state.runSerial + 1) % windows.length] || primaryOvertakeZone();
+  const firstZone = runTargetZone(side, windows) || primaryOvertakeZone();
   if (!firstZone) return null;
   const trackLength = frame.track?.length_m || currentTrack.lengthM;
   const rawProgress = Math.max(0, Number(frame.track?.s_m || 0) / trackLength);
   const start = Math.max(0, firstZone.position - .05);
   const completeAt = firstZone.position + .018;
+  // Before the selected window, require the live decision and a close gap.
+  // Once the car has reached the window, retain the pass geometry so the
+  // visual order remains stable even when the opponent falls further back.
+  if ((action !== 'ATTACK' || gapS > 1.2) && rawProgress < start) return null;
   const phase = Math.max(0, Math.min(1, (rawProgress - start) / Math.max(.012, completeAt - start)));
   const passBlend = smoothstep(.28, .84, phase);
   const speed = Math.max(1, Number(frame.kinematics?.speed_mps || 70));
@@ -684,12 +691,16 @@ function renderOvertakeWindows(side, frame, motion = overtakeMotion(frame, side)
   const list = $(side + '-window-list');
   if (!list) return;
   const zones = showcaseOvertakeZones();
+  const targetZone = runTargetZone(side, zones);
   const trackLength = frame?.track?.length_m || currentTrack.lengthM;
   const progress = frame ? (((frame.track?.s_m || 0) / trackLength) % 1 + 1) % 1 : 0;
   list.innerHTML = zones.map((zone, index) => {
     const delta = ((zone.position - progress + .5) % 1 + 1) % 1 - .5;
-    const selected = motion?.zone?.id === zone.id;
-    const status = selected && motion?.completed ? 'COMPLETE' : selected && Math.abs(delta) <= .048 ? 'ACTIVE' : delta > .048 ? 'NEXT' : 'PASSED';
+    const selected = targetZone?.id === zone.id;
+    const completeAt = zone.position + .018;
+    const complete = selected && progress >= completeAt;
+    const active = selected && !complete && Boolean(motion) && Math.abs(delta) <= .048;
+    const status = complete ? 'COMPLETE' : active ? 'ACTIVE' : delta > .048 ? 'NEXT' : 'PASSED';
     return '<div class="window-item ' + status.toLowerCase() + (selected ? ' selected' : '') + '"><span>WINDOW 0' + (index + 1) + '</span><b>' + zone.id + ' · ' + zone.approach + '</b><small>' + status + (selected ? ' · RUN TARGET' : '') + '</small></div>';
   }).join('');
 }

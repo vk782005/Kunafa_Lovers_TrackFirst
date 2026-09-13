@@ -310,8 +310,8 @@ body[data-view="delta"] .comparison-telemetry{left:auto;right:12px;bottom:57px;w
 body[data-view="delta"] .comparison-telemetry>span{padding:7px 9px}
 body[data-view="delta"] .comparison-time{left:auto;right:12px;bottom:12px;width:220px;background:#080b0dea;box-shadow:0 8px 18px #0006}
 
-/* Keep the two active race windows visible beside each track without
-   obscuring the racing line. The selected window is the run's target and
+/* Keep the active race window visible beside each track without obscuring
+   the racing line. The selected window is the run's target and
    changes from NEXT to ACTIVE to COMPLETE as the replay advances. */
 body[data-view="delta"] .window-list{position:absolute;z-index:4;top:120px;right:12px;width:220px;border:1px solid #394348;background:#080b0de8;box-shadow:0 8px 18px #0006;pointer-events:none}
 body[data-view="delta"] .window-list::before{content:"OVERTAKE WINDOWS";display:block;padding:7px 9px;border-bottom:1px solid #394348;color:#8d9897;font:700 7px var(--mono);letter-spacing:.11em}
