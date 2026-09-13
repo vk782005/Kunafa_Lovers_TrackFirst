@@ -85,7 +85,6 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:18px;b
 .race-state.vsc{color:var(--amber)}.race-state.red{color:var(--red)}
 .visual-wrap{height:590px;min-height:480px;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 38%,#172226 0,#0a1012 70%)}
 .visual-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.visual-wrap #pov-canvas{display:none}.visual-wrap.pov-mode #track-canvas{display:none}.visual-wrap.pov-mode #pov-canvas{display:block}
 .frame-status{position:absolute;z-index:5;top:17px;left:18px;padding:7px 9px;border:1px solid #334044;background:#070b0ddd;color:#a8b4b1;font:600 9px var(--mono);letter-spacing:.06em}
 .map-zone-list{position:absolute;z-index:6;left:18px;right:18px;top:55px;display:flex;gap:5px;flex-wrap:wrap;pointer-events:none}
 .map-zone-chip{pointer-events:auto;display:flex;align-items:center;gap:6px;border:1px solid #5b3c48;background:#0a0e10e8;color:var(--pink);padding:5px 7px;font:600 9px var(--mono)}
@@ -95,7 +94,6 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:12px;height:18px;b
 .telemetry-strip{position:absolute;z-index:5;left:20px;right:20px;bottom:18px;display:grid;grid-template-columns:repeat(4,1fr);background:#070b0de8;border:1px solid #3a4649;backdrop-filter:blur(10px)}
 .telemetry-strip>span{padding:11px 13px;border-right:1px solid #2f3a3e}.telemetry-strip>span:last-child{border-right:0}.telemetry-strip small{display:block;color:#697578;font:600 8px var(--mono);letter-spacing:.1em}.telemetry-strip b{display:block;color:var(--lime);font:700 16px var(--mono);margin-top:4px}
 .visual-footer{height:42px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:#6e7a7d;font:9px var(--mono);letter-spacing:.06em}
-.pov-mode:after{content:"HALO CAM · STEERING · SUSPENSION";position:absolute;right:18px;top:17px;z-index:5;color:#8c9895;background:#070b0ddd;border:1px solid #334044;padding:7px 9px;font:9px var(--mono)}
 
 .metrics-rail{padding:17px;display:flex;flex-direction:column;gap:9px}
 .metrics-heading{padding:4px 3px 10px}.metrics-heading>span:last-child{color:#707b7e;font:9px var(--mono)}
@@ -282,26 +280,27 @@ body[data-view="delta"] .comparison-title .eyebrow{flex:0 0 auto;margin:0}
 body[data-view="delta"] .comparison-title h2{flex:0 0 auto;margin:0}
 body[data-view="delta"] .comparison-title #scenario-delta{overflow:hidden;color:#8a2b3d;font:600 8px var(--mono);letter-spacing:.035em;text-overflow:ellipsis;white-space:nowrap}
 body[data-view="delta"] .comparison-tools{display:flex;align-items:center;gap:8px;flex:0 0 auto}
-body[data-view="delta"] .race-view-switch{display:flex;align-items:center;border:1px solid #bfc0bd;background:#fff}
-body[data-view="delta"] .race-view-switch button,
 body[data-view="delta"] .details-toggle{height:36px;padding:0 14px;border:0;background:#fff;color:#555a5c;font:700 8px var(--mono);letter-spacing:.1em;cursor:pointer;white-space:nowrap}
-body[data-view="delta"] .race-view-switch button+button{border-left:1px solid #d4d4d1}
-body[data-view="delta"] .race-view-switch button:hover,
 body[data-view="delta"] .details-toggle:hover{background:#f0f0ed;color:#111315}
-body[data-view="delta"] .race-view-switch button.active{background:#e4002b;color:#fff}
 body[data-view="delta"] .details-toggle{border:1px solid #111315;color:#111315}
-body[data-view="delta"] .comparison-visual{height:500px}
-body[data-view="delta"] .visual-split-labels{grid-template-columns:1fr 1fr}
+body[data-view="delta"] .comparison-visual{height:620px}
+body[data-view="delta"] .visual-split-labels{grid-template-columns:1fr}
 body[data-view="delta"] .visual-split-labels span:first-child{text-align:left}
-body[data-view="delta"] .visual-split-labels span:last-child{text-align:left}
-body[data-race-view="track"] .visual-split-labels,
-body[data-race-view="pov"] .visual-split-labels{grid-template-columns:1fr}
-body[data-race-view="track"] .visual-split-labels span:last-child,
-body[data-race-view="pov"] .visual-split-labels span:first-child{display:none}
-body[data-race-view="pov"] .comparison-visual{height:620px}
-body[data-race-view="track"] .comparison-visual{height:620px}
-body[data-race-view="pov"] .comparison-card{border-top-color:#e4002b}
 body.details-collapsed[data-view="delta"] main{grid-template-columns:minmax(0,1fr) 0}
 body.details-collapsed[data-view="delta"] .metrics-rail{display:none}
 body.details-collapsed[data-view="delta"] .comparison-panel,
 body.details-collapsed[data-view="delta"] .playback{grid-column:1/-1}
+
+/* Track-only decision visualization */
+body[data-view="delta"] .track-only-label{padding:0 12px;color:#707577;font:700 8px var(--mono);letter-spacing:.11em;white-space:nowrap}
+body[data-view="delta"] .visual-split-labels{grid-template-columns:1fr}
+body[data-view="delta"] .overtake-cue{position:absolute;z-index:5;top:76px;left:50%;width:390px;transform:translateX(-50%);padding:15px 17px 13px;border:1px solid #4c3d2b;border-left:3px solid #ffad18;background:#101318ed;box-shadow:0 16px 34px #0008;color:#f3f3ef;pointer-events:none;animation:overtake-cue-in .2s ease-out}
+body[data-view="delta"] .overtake-cue[hidden]{display:none}
+body[data-view="delta"] .overtake-cue::after{content:"";position:absolute;left:50%;bottom:-38px;width:1px;height:38px;background:linear-gradient(#ffad18,transparent)}
+body[data-view="delta"] .overtake-cue>span{display:block;margin-bottom:7px;color:#ffb62e;font:700 8px var(--mono);letter-spacing:.12em}
+body[data-view="delta"] .overtake-cue h3{margin:0 0 8px;color:#fff;font:700 17px var(--cond);letter-spacing:.025em}
+body[data-view="delta"] .overtake-cue p{margin:0;color:#c9ccca;font:10px/1.55 var(--mono)}
+body[data-view="delta"] .overtake-cue>div{margin-top:11px;padding-top:9px;border-top:1px solid #353a3d;color:#aeb4b2;font:700 8px var(--mono);letter-spacing:.07em;word-spacing:7px}
+body[data-view="delta"] .overtake-cue[data-support="approved"]{border-color:#345242;border-left-color:#5ce08a}body[data-view="delta"] .overtake-cue[data-support="approved"]::after{background:linear-gradient(#5ce08a,transparent)}body[data-view="delta"] .overtake-cue[data-support="approved"]>span{color:#73e79b}
+body[data-view="delta"] .overtake-cue[data-support="conditional"]{border-left-color:#e4002b}body[data-view="delta"] .overtake-cue[data-support="conditional"]::after{background:linear-gradient(#e4002b,transparent)}body[data-view="delta"] .overtake-cue[data-support="conditional"]>span{color:#ff5c76}
+@keyframes overtake-cue-in{from{opacity:0;transform:translate(-50%,7px)}to{opacity:1;transform:translate(-50%,0)}}

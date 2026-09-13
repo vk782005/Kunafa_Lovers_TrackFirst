@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=86';
+import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=90';
 
 const $ = (id) => document.getElementById(id);
 // The race terminal and GPU API are served by the same FastAPI origin. A
@@ -24,8 +24,6 @@ const state = {
   time: 0,
   playing: false,
   rate: 1,
-  view: 'circuit',
-  comparisonMode: 'split',
   detailsCollapsed: false,
   connected: false,
   connectPromise: null,
@@ -49,7 +47,7 @@ const state = {
   snapshotRestored: false
 };
 
-let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig, povMotion;
+let trackRenderer, trackScene, trackCamera, carMesh, oppMesh;
 let currentTrack = getTrack(state.controls.track_id), trackCurve;
 let trackRoad, trackLine, trackRacingLine, trackZoneGroup;
 const comparisonViews = { before: null, after: null };
@@ -485,55 +483,6 @@ function makeF1Car(primary = '#f1f1ef', secondary = '#15191b', scale = 1, accent
   return car;
 }
 
-function makeCockpit(scene, camera, compact = false) {
-  const rig = new THREE.Group(); scene.add(rig);
-  const carbon = new THREE.MeshStandardMaterial({ color: '#090d0f', roughness: .42, metalness: .52 });
-  const haas = new THREE.MeshStandardMaterial({ color: '#e5e8e3', roughness: .36, metalness: .32 });
-  const red = new THREE.MeshStandardMaterial({ color: '#c7273b', roughness: .34, metalness: .28 });
-  const asphalt = new THREE.MeshStandardMaterial({ color: '#171b1c', roughness: .97, metalness: .01 });
-  const width = compact ? 120 : 170, depth = compact ? 1000 : 1500, roadHalf = compact ? 16 : 20;
-  const road = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), asphalt); road.rotation.x = -Math.PI / 2; road.position.z = -depth * .47; rig.add(road);
-  const verge = new THREE.Mesh(new THREE.PlaneGeometry(width * 2.8, depth), new THREE.MeshStandardMaterial({ color: '#17251d', roughness: 1 })); verge.rotation.x = -Math.PI / 2; verge.position.set(0, -.07, -depth * .47); rig.add(verge); road.renderOrder = 1;
-  const roadFlow = new THREE.Group(), kerbFlow = new THREE.Group(), postFlow = new THREE.Group(); rig.add(roadFlow, kerbFlow, postFlow);
-  const segmentSpan = compact ? 720 : 1080;
-  for (let i = 0; i < 34; i++) {
-    const mark = new THREE.Mesh(new THREE.BoxGeometry(.36, .04, compact ? 7 : 9), new THREE.MeshBasicMaterial({ color: '#d6ddd7' }));
-    mark.userData.baseZ = -i * (compact ? 25 : 34) - 24; mark.position.set(0, .06, mark.userData.baseZ); roadFlow.add(mark);
-  }
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < 52; i++) {
-      const kerb = new THREE.Mesh(new THREE.BoxGeometry(compact ? 3.2 : 4.2, .25, compact ? 8 : 11), new THREE.MeshStandardMaterial({ color: i % 2 ? '#d52f45' : '#eceee8', roughness: .82 }));
-      kerb.userData.baseZ = -i * (compact ? 15 : 21) - 18; kerb.position.set(side * roadHalf, .14, kerb.userData.baseZ); kerbFlow.add(kerb);
-    }
-    for (let i = 0; i < 30; i++) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(.45, compact ? 5 : 7, .45), new THREE.MeshStandardMaterial({ color: '#7f8b87', roughness: .7, metalness: .45 }));
-      post.userData.baseZ = -i * (compact ? 26 : 36) - 20; post.position.set(side * (roadHalf + 5), post.geometry.parameters.height / 2, post.userData.baseZ); postFlow.add(post);
-    }
-  }
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(compact ? 3.7 : 4.8, compact ? 36 : 44, 8), haas); nose.rotation.x = -Math.PI / 2; nose.position.set(0, compact ? -3.5 : -2.5, compact ? -7 : -10); rig.add(nose);
-  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(compact ? 2.4 : 3.1, .35, compact ? 25 : 32), red); noseStripe.position.set(0, compact ? -.3 : .3, compact ? -5 : -9); rig.add(noseStripe);
-  for (const side of [-1, 1]) {
-    const tire = new THREE.Mesh(new THREE.CylinderGeometry(compact ? 5 : 6.2, compact ? 5 : 6.2, compact ? 3.8 : 4.6, 18), new THREE.MeshStandardMaterial({ color: '#050607', roughness: .92 }));
-    tire.rotation.z = Math.PI / 2; tire.position.set(side * (compact ? 15.5 : 18.5), compact ? 1.8 : 2.5, compact ? -12 : -16); tire.name = 'cockpit-front-wheel'; rig.add(tire);
-    const mirror = new THREE.Mesh(new THREE.BoxGeometry(compact ? 4.4 : 5.4, compact ? 1.8 : 2.2, compact ? 2.1 : 2.6), carbon); mirror.position.set(side * (compact ? 10 : 12), compact ? 7.5 : 9.5, compact ? 8 : 7); rig.add(mirror);
-    const stay = new THREE.Mesh(new THREE.BoxGeometry(.45, compact ? 5 : 6, .45), carbon); stay.position.set(side * (compact ? 8 : 10), compact ? 5.5 : 7, compact ? 8 : 7); stay.rotation.z = side * -.35; rig.add(stay);
-  }
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(compact ? 11.2 : 13.8, compact ? 1.25 : 1.55, 9, 38, Math.PI), carbon); halo.rotation.z = Math.PI; halo.position.set(0, compact ? 12 : 15, compact ? 4 : 3); rig.add(halo);
-  const haloStem = new THREE.Mesh(new THREE.BoxGeometry(compact ? .85 : 1.05, compact ? 12 : 15, compact ? .85 : 1.05), carbon); haloStem.position.set(0, compact ? 9 : 11, compact ? -4 : -6); haloStem.rotation.x = -.15; rig.add(haloStem);
-  const wheel = new THREE.Group(); wheel.position.set(0, compact ? .5 : 1, compact ? 13.5 : 16); rig.add(wheel);
-  const wheelBody = new THREE.Mesh(new THREE.BoxGeometry(compact ? 9.5 : 12, compact ? 4.8 : 6, compact ? 1.8 : 2.2), carbon); wheel.add(wheelBody);
-  for (const side of [-1, 1]) { const grip = new THREE.Mesh(new THREE.CylinderGeometry(compact ? 1.7 : 2.1, compact ? 1.7 : 2.1, compact ? 5.8 : 7, 12), carbon); grip.rotation.x = Math.PI / 2; grip.position.x = side * (compact ? 5.2 : 6.5); wheel.add(grip); }
-  const display = new THREE.Mesh(new THREE.BoxGeometry(compact ? 6.2 : 7.6, compact ? 2.1 : 2.6, .3), new THREE.MeshBasicMaterial({ color: '#b7f578' })); display.position.z = compact ? -1 : -1.25; wheel.add(display);
-  const brakeGlow = new THREE.Mesh(new THREE.BoxGeometry(compact ? 5 : 6, .4, .4), new THREE.MeshBasicMaterial({ color: '#ff4058' })); brakeGlow.position.set(-4, compact ? -4.5 : -5.3, 1); wheel.add(brakeGlow);
-  const throttleGlow = new THREE.Mesh(new THREE.BoxGeometry(compact ? 5 : 6, .4, .4), new THREE.MeshBasicMaterial({ color: '#b7f578' })); throttleGlow.position.set(4, compact ? -4.5 : -5.3, 1); wheel.add(throttleGlow);
-  const opponent = makeF1Car('#e96a86', '#16191b', compact ? .17 : .22); opponent.position.set(0, .5, compact ? -70 : -90); rig.add(opponent);
-  const rainFlow = new THREE.Group(); rig.add(rainFlow);
-  for (let i = 0; i < (compact ? 28 : 40); i++) { const drop = new THREE.Mesh(new THREE.BoxGeometry(.035, compact ? 2.6 : 3.4, .035), new THREE.MeshBasicMaterial({ color: '#9ed9ff', transparent: true, opacity: .62 })); drop.userData.baseY = 5 + (i % 8) * 4; drop.userData.baseZ = -18 - i * (compact ? 4 : 5); drop.position.set(((i * 17) % 39) - 19, drop.userData.baseY, drop.userData.baseZ); rainFlow.add(drop); }
-  scene.add(new THREE.HemisphereLight('#bcd8e4', '#0c1214', 1.45), new THREE.DirectionalLight('#ffffff', 1.8));
-  camera.position.set(0, compact ? 14 : 18, compact ? 27 : 31); camera.rotation.x = -.09;
-  return { rig, wheel, roadFlow, kerbFlow, postFlow, rainFlow, opponent, segmentSpan, brakeGlow, throttleGlow, frontWheels: rig.children.filter(child => child.name === 'cockpit-front-wheel') };
-}
-
 function placeCarOnTrack(car, progress, y = 3, frame = null) {
   const u = (progress % 1 + 1) % 1, point = trackCurve.getPointAt(u), tangent = trackCurve.getTangentAt(u);
   car.position.copy(point); car.position.y = y;
@@ -543,43 +492,15 @@ function placeCarOnTrack(car, progress, y = 3, frame = null) {
   car.rotation.z = Math.max(-.07, Math.min(.07, (frame?.pose?.roll_rad || 0) * .85));
 }
 
-function animateCockpit(motion, camera, frame, compact = false) {
-  if (!motion || !frame) return;
-  const k = frame.kinematics || {}, controls = frame.controls || {}, track = frame.track || {}, flags = frame.flags || {};
-  const steer = k.steering_rad || 0, speed = k.speed_mps || 0, yaw = k.yaw_rate_radps || 0, t = frame.t || 0;
-  const slip = Math.max(...Object.values(frame.wheels || {}).map(w => Math.abs(w.slip_ratio || 0)), 0);
-  const vibration = Math.min(compact ? .13 : .2, speed * .0012 + slip * .24);
-  motion.wheel.rotation.z = -steer * .78;
-  motion.frontWheels.forEach(wheel => { wheel.rotation.x = -(track.s_m || 0) / 4.1; wheel.rotation.y = steer * .72; });
-  motion.rig.rotation.z = (frame.pose?.roll_rad || 0) * .65 + Math.sin(t * 48) * vibration * .055;
-  motion.rig.rotation.x = (frame.pose?.pitch_rad || 0) * .45 - (k.accel_mps2 || 0) * .006;
-  motion.rig.position.x = -steer * (compact ? .55 : .8);
-  camera.position.x = steer * (compact ? .3 : .45) + Math.sin(t * 37) * vibration;
-  camera.position.y = (compact ? 14 : 18) + Math.abs(yaw) * 1.6 + Math.sin(t * 43) * vibration;
-  if (motion.lastGear != null && motion.lastGear !== controls.gear) motion.shiftKick = compact ? .22 : .32;
-  motion.lastGear = controls.gear; motion.shiftKick = (motion.shiftKick || 0) * .82;
-  camera.position.z = (compact ? 27 : 31) - motion.shiftKick;
-  camera.rotation.y = steer * .085; camera.rotation.z = -yaw * .045;
-  const phase = (track.s_m || 0) % motion.segmentSpan;
-  for (const group of [motion.roadFlow, motion.kerbFlow, motion.postFlow]) for (const item of group.children) item.position.z = ((item.userData.baseZ + phase + motion.segmentSpan) % motion.segmentSpan) - motion.segmentSpan;
-  motion.brakeGlow.scale.x = .15 + (controls.brake || 0) * .85; motion.throttleGlow.scale.x = .15 + (controls.throttle || 0) * .85;
-  motion.brakeGlow.visible = (controls.brake || 0) > .02; motion.throttleGlow.visible = (controls.throttle || 0) > .02;
-  motion.opponent.position.z = -(32 + Math.min(160, Math.max(.08, frame.race?.gap_ahead_s || .5) * 52));
-  motion.opponent.position.x = Math.sin(t * .45) * 1.2 - steer * 2;
-  const rain = Math.max(frame.tires?.rain_intensity || 0, frame.race?.rain_intensity || 0); motion.rainFlow.visible = rain > .03;
-  motion.rainFlow.children.forEach((drop, i) => { drop.position.y = 3 + ((drop.userData.baseY - t * (28 + speed * .12) + i * .7) % 34 + 34) % 34; drop.material.opacity = .25 + rain * .65; });
-  sceneBackgroundForFlags(motion.rig.parent, flags, frame.race?.weather);
-}
-
 function sceneBackgroundForFlags(scene, flags = {}, weather = 'DRY') {
   if (!scene) return;
   scene.background = new THREE.Color(flags.red_flag ? '#351117' : flags.vsc ? '#292510' : weather === 'WET' ? '#16232b' : '#14242c');
 }
 function initThree() {
-  const trackCanvas = $('track-canvas'), povCanvas = $('pov-canvas');
+  const trackCanvas = $('track-canvas');
   trackRenderer = new THREE.WebGLRenderer({ canvas: trackCanvas, antialias: true, alpha: true });
-  povRenderer = new THREE.WebGLRenderer({ canvas: povCanvas, antialias: true, alpha: false });
-  [trackRenderer, povRenderer].forEach(r => { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)); r.outputColorSpace = THREE.SRGBColorSpace; });
+  trackRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  trackRenderer.outputColorSpace = THREE.SRGBColorSpace;
   trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#070a0f');
   trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
   trackRoad = new THREE.Mesh(makeTrackRibbon(trackCurve, 8, 256, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#1b222b', side: THREE.DoubleSide }));
@@ -591,9 +512,6 @@ function initThree() {
   carMesh = makeTrackMarker('#e4002b', '31  OCO', true);
   oppMesh = makeTrackMarker('#7d858b', '87  GAS', false);
   trackScene.add(carMesh, oppMesh);
-  povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
-  povCamera = new THREE.PerspectiveCamera(72, 1, .1, 2000);
-  povMotion = makeCockpit(povScene, povCamera, false); povRig = povMotion.rig; wheelMesh = povMotion.wheel;
   initComparisonViews();
   resizeThree(); window.addEventListener('resize', resizeThree);
 }
@@ -620,25 +538,17 @@ function makeComparisonView(canvasId) {
   const trackCar = makeTrackMarker('#e4002b', '31  OCO', true);
   const trackOpp = makeTrackMarker('#7d858b', '87  GAS', false);
   trackScene.add(trackCar, trackOpp);
-  const povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
-  const povCamera = new THREE.PerspectiveCamera(64, 1, .1, 2000);
-  const motion = makeCockpit(povScene, povCamera, true);
-  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig: motion.rig, wheel: motion.wheel, motion, road, edge, racingLine, zoneGroup };
+  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, road, edge, racingLine, zoneGroup };
 }
 function resizeThree() {
   const box = $('visual-wrap').getBoundingClientRect(), w = Math.max(320, box.width), h = Math.max(280, box.height - 2);
-  trackRenderer?.setSize(w, h, false); povRenderer?.setSize(w, h, false);
+  trackRenderer?.setSize(w, h, false);
   fitTrackCamera(trackCamera, w / h);
-  if (povCamera) { povCamera.aspect = w / h; povCamera.updateProjectionMatrix(); }
   Object.values(comparisonViews).forEach(view => {
     if (!view) return;
     const box = view.canvas.getBoundingClientRect(), w = Math.max(260, box.width), h = Math.max(190, box.height);
     view.renderer.setSize(w, h, false);
-    const mode = state.comparisonMode || 'split';
-    const mapWidth = mode === 'track' ? w : mode === 'pov' ? 0 : w * .5;
-    const povWidth = mode === 'pov' ? w : mode === 'track' ? 0 : w * .5;
-    if (mapWidth) fitTrackCamera(view.trackCamera, mapWidth / h);
-    if (povWidth) { view.povCamera.aspect = Math.max(.62, povWidth / h); view.povCamera.updateProjectionMatrix(); }
+    fitTrackCamera(view.trackCamera, w / h);
   });
   renderComparisonViews();
 }
@@ -648,9 +558,8 @@ function renderThree(frame) {
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame.kinematics?.speed_mps || 70) / currentTrack.lengthM));
   placeCarOnTrack(carMesh, s, 4, frame); placeCarOnTrack(oppMesh, s + gapProgress, 4, frame);
   animateTrackMarker(carMesh, frame, 0); animateTrackMarker(oppMesh, frame, 1.7);
-  animateCockpit(povMotion, povCamera, frame, false);
   setActiveZone(trackZoneGroup, frame.track?.zone);
-  if (state.view === 'pov') povRenderer.render(povScene, povCamera); else trackRenderer.render(trackScene, trackCamera);
+  trackRenderer.render(trackScene, trackCamera);
 }
 function renderComparisonViews() {
   const before = frameAtTimeFrom(state.beforeFrames, state.time);
@@ -672,42 +581,62 @@ function setComparisonTelemetry(prefix, frame) {
   $(prefix + '-race-state').textContent = stateLabel;
   $(prefix + '-race-state').classList.toggle('alert', stateLabel === 'RED' || stateLabel === 'VSC');
 }
+function renderOvertakeCue(side, frame) {
+  const cue = $(side + '-overtake-cue');
+  if (!cue) return;
+  const assessment = side === 'before' ? state.beforeAssessment : state.assessment;
+  const controls = side === 'before' ? (state.beforeControls || state.controls) : state.controls;
+  const flags = frame?.flags || {}, race = frame?.race || {}, kinematics = frame?.kinematics || {};
+  const trackLength = frame?.track?.length_m || currentTrack.lengthM;
+  const progress = frame ? (((frame.track?.s_m || 0) / trackLength) % 1 + 1) % 1 : 0;
+  const windows = currentTrack.zones.filter(zone => zone.type === 'Overtake');
+  const candidates = windows.map(zone => ({ zone, delta: ((zone.position - progress + .5) % 1 + 1) % 1 - .5 }));
+  const target = candidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))[0];
+  const gap = Number(race.gap_ahead_s ?? 99);
+  const action = race.decision || assessment?.decision || 'HOLD';
+  const active = Boolean(frame && target && action === 'ATTACK' && !flags.red_flag && !flags.vsc && !flags.safety_car && gap <= 1.2 && target.delta >= -.022 && target.delta <= .048);
+  cue.hidden = !active;
+  if (!active) return;
+  const answers = assessment?.answers || {}, pass = Number(answers.can_pass_within_60s?.probability || 0), durable = Number(answers.durable_pass?.probability || 0);
+  const recommendation = assessment?.recommendation?.action || 'HOLD';
+  const ers = Math.round(Number(frame.energy?.ers_fraction ?? controls?.ers_fraction ?? 0) * 100);
+  const reserve = Math.max(8, Math.round(ers * (durable < .45 ? .42 : .27)));
+  const speed = Math.max(1, Number(kinematics.speed_mps || 1));
+  const eta = Math.max(0, target.delta * trackLength / speed);
+  const weather = String(controls?.weather || race.weather || 'DRY').toUpperCase();
+  const tyre = String(controls?.tire_compound || frame.tires?.compound || 'MEDIUM').toUpperCase();
+  const rain = Math.round(Number(controls?.rain_intensity ?? race.rain_intensity ?? 0) * 100);
+  const support = recommendation === 'ATTACK' ? 'MODEL APPROVED' : pass >= .22 ? 'CONDITIONAL' : 'ENGINEER OVERRIDE';
+  const phase = gap <= 0 ? 'PASS COMPLETE' : eta > .7 ? 'OVERTAKE WINDOW OPENING' : 'OVERTAKE COMMITTED';
+  const condition = rain > 15 ? weather + ' · ' + rain + '% RAIN · ' + tyre : weather + ' · ' + tyre;
+  const instruction = pass < .22
+    ? 'Attack command is live with low model support. Keep ' + reserve + '% ERS for the counterattack.'
+    : 'Deploy on exit and keep ' + reserve + '% ERS in reserve to protect the position.';
+  $(side + '-overtake-kicker').textContent = 'ENGINE · ' + support + (eta > .15 ? ' · ' + eta.toFixed(1) + 'S TO COMMIT' : ' · COMMIT NOW');
+  $(side + '-overtake-title').textContent = phase + ' · ' + target.zone.id;
+  $(side + '-overtake-copy').textContent = 'OCO is ' + Math.abs(gap).toFixed(2) + 's ' + (gap <= 0 ? 'ahead of' : 'behind') + ' GAS at ' + target.zone.approach + '. ' + instruction;
+  $(side + '-overtake-meta').textContent = condition + '   PASS ' + Math.round(pass * 100) + '%   DURABLE ' + Math.round(durable * 100) + '%   ERS ' + ers + '%';
+  cue.dataset.support = support === 'MODEL APPROVED' ? 'approved' : support === 'CONDITIONAL' ? 'conditional' : 'override';
+}
 function renderComparisonView(view, frame, side) {
   if (!view) return;
   const renderer = view.renderer, canvas = view.canvas;
-  // WebGLRenderer viewport coordinates are CSS pixels. Using canvas.width here
-  // applied devicePixelRatio twice and cropped the POV on high-density screens.
+  // Use CSS pixels because WebGLRenderer applies devicePixelRatio internally.
   const width = Math.max(1, Math.floor(canvas.clientWidth || 520));
   const height = Math.max(1, Math.floor(canvas.clientHeight || 240));
-  const mode = state.comparisonMode || 'split';
   const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame?.kinematics?.speed_mps || 70) / currentTrack.lengthM));
   placeCarOnTrack(view.trackCar, s, 4, frame); placeCarOnTrack(view.trackOpp, s + gapProgress, 4, frame);
   animateTrackMarker(view.trackCar, frame, 0); animateTrackMarker(view.trackOpp, frame, 1.7);
   setActiveZone(view.zoneGroup, frame?.track?.zone);
   renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
-  if (mode !== 'pov') {
-    const mapWidth = mode === 'track' ? width : Math.floor(width * .5);
-    renderer.setViewport(0, 0, mapWidth, height); renderer.setScissor(0, 0, mapWidth, height);
-    renderer.render(view.trackScene, view.trackCamera);
-  }
-  if (mode !== 'track') {
-    const povX = mode === 'pov' ? 0 : Math.floor(width * .5);
-    const povWidth = mode === 'pov' ? width : width - povX;
-    renderer.setViewport(povX, 0, povWidth, height); renderer.setScissor(povX, 0, povWidth, height);
-    animateCockpit(view.motion, view.povCamera, frame, true);
-    renderer.render(view.povScene, view.povCamera);
-  }
+  renderer.setViewport(0, 0, width, height); renderer.setScissor(0, 0, width, height);
+  renderer.render(view.trackScene, view.trackCamera);
   renderer.setScissorTest(false);
+  renderOvertakeCue(side, frame);
 }
 function syncComparisonLayout() {
-  document.body.dataset.raceView = state.comparisonMode;
   document.body.classList.toggle('details-collapsed', state.detailsCollapsed);
-  document.querySelectorAll('.race-view-switch [data-race-view]').forEach(button => {
-    const active = button.dataset.raceView === state.comparisonMode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
   const toggle = $('details-toggle');
   if (toggle) {
     toggle.textContent = state.detailsCollapsed ? 'SHOW DETAILS' : 'HIDE DETAILS';
@@ -715,20 +644,9 @@ function syncComparisonLayout() {
   }
   requestAnimationFrame(() => { resizeThree(); renderComparisonViews(); });
 }
-function setComparisonMode(mode) {
-  if (!['split', 'track', 'pov'].includes(mode)) return;
-  state.comparisonMode = mode;
-  // POV is the inspection mode: give the render the full workspace immediately.
-  state.detailsCollapsed = mode === 'pov';
-  syncComparisonLayout();
-}
 function toggleDetails() {
   state.detailsCollapsed = !state.detailsCollapsed;
   syncComparisonLayout();
-}
-function setView(view) {
-  state.view = view; $('visual-wrap').classList.toggle('pov-mode', view === 'pov'); $('view-label').textContent = view === 'pov' ? 'DRIVER POV' : 'CIRCUIT VIEW';
-  $('circuit-view').classList.toggle('active', view === 'circuit'); $('pov-view-button').classList.toggle('active', view === 'pov'); resizeThree(); renderFrame();
 }
 function seek(seconds) { state.time = Math.max(0, Math.min(60, seconds)); state.frameIndex = state.frames.length ? Math.min(state.frames.length - 1, Math.round(state.time / .25)) : 0; renderFrame(); }
 function playToggle() { state.playing = !state.playing; $('play').textContent = state.playing ? 'Ⅱ' : '▶'; }
@@ -808,9 +726,6 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-$('circuit-view').addEventListener('click', () => setView('circuit'));
-$('pov-view-button').addEventListener('click', () => setView('pov'));
-document.querySelectorAll('.race-view-switch [data-race-view]').forEach(button => button.addEventListener('click', () => setComparisonMode(button.dataset.raceView)));
 $('details-toggle')?.addEventListener('click', toggleDetails);
 $('play').addEventListener('click', playToggle);
 $('reset').addEventListener('click', () => { state.playing = false; seek(0); });
