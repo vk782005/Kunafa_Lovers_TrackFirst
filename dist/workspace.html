@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
   <title>Overtiq — Race decision workspace</title>
   <meta name="description" content="GPU-backed F1 race scenario and overtaking decision console for Haas car 31.">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=60">
 </head>
 <body data-view="delta">
   <script>if (new URLSearchParams(location.search).get('view') === 'simulator') location.replace('./');</script>
@@ -56,11 +56,21 @@
       </article>
 
       <aside class="metrics-rail" aria-label="Engineer metrics">
-        <div class="metrics-heading"><span class="eyebrow">ENGINEER OUTPUT</span><span id="assessment-time">REMOTE COMPUTE</span></div>
+        <div class="metrics-heading"><span class="eyebrow">ENGINEER DECISION</span><span id="assessment-time">REMOTE COMPUTE</span></div>
         <article class="metric-card primary"><div><span>GAIN POSITION</span><small>WITHIN 3 LAPS</small></div><b id="answer-gain">—</b><div class="bar"><i id="bar-gain"></i></div><p id="evidence-gain">Awaiting scenario evidence</p></article>
         <article class="metric-card"><div><span>PASS WINDOW</span><small>WITHIN 60 SEC</small></div><b id="answer-pass">—</b><div class="bar"><i id="bar-pass"></i></div><p id="evidence-pass">Awaiting scenario evidence</p></article>
         <article class="metric-card"><div><span>DURABLE PASS</span><small>AHEAD +3 LAPS</small></div><b id="answer-durable">—</b><div class="bar"><i id="bar-durable"></i></div><p id="evidence-durable">Awaiting scenario evidence</p></article>
         <article class="finish-card"><span>PROJECTED FINISH</span><strong id="finish-expected">—</strong><div id="finish-bars" class="finish-bars"></div><p id="finish-note">Waiting for the model.</p></article>
+        <section class="impact-panel" aria-label="Before and after model inputs">
+          <div class="impact-heading"><span>CONDITION EFFECT</span><small id="impact-samples">— SCENARIOS</small></div>
+          <div class="impact-columns"><span>METRIC</span><span>BASE</span><span>ADJUSTED</span><span>Δ</span></div>
+          <div class="impact-row"><strong>PASS MODEL</strong><span id="impact-pass-before">—</span><span id="impact-pass-after">—</span><b id="impact-pass-delta">—</b></div>
+          <div class="impact-row"><strong>GRIP</strong><span id="impact-grip-before">—</span><span id="impact-grip-after">—</span><b id="impact-grip-delta">—</b></div>
+          <div class="impact-row"><strong>TYRE FIT</strong><span id="impact-tyre-before">—</span><span id="impact-tyre-after">—</span><b id="impact-tyre-delta">—</b></div>
+          <div class="impact-row"><strong>ERS</strong><span id="impact-ers-before">—</span><span id="impact-ers-after">—</span><b id="impact-ers-delta">—</b></div>
+          <div class="impact-row"><strong>FUEL</strong><span id="impact-fuel-before">—</span><span id="impact-fuel-after">—</span><b id="impact-fuel-delta">—</b></div>
+          <div class="impact-row"><strong>CONFIDENCE</strong><span id="impact-confidence-before">—</span><span id="impact-confidence-after">—</span><b id="impact-confidence-delta">—</b></div>
+        </section>
         <div class="driver-card"><div><span>31</span><strong>ESTEBAN OCON</strong><small>HAAS F1 TEAM</small></div><b id="position">P14</b><span id="speed">—</span><i id="tyre-badge">M</i><small id="tyre-age">18 laps</small><span id="driver-number" hidden>31</span><span id="driver-name" hidden>Esteban Ocon</span></div>
       </aside>
     </section>
@@ -83,6 +93,6 @@
     <section class="runtime-strip" aria-label="Remote compute status"><span>SIM <b id="compute-sim">CONNECTING</b></span><span>PHYSICS <b id="compute-physics">CONNECTING</b></span><span>MODEL <b id="compute-model">WAITING</b></span><span>TELEMETRY <b id="compute-telemetry">NO FRAME</b></span><span>GPU TIME <b id="compute-latency">—</b></span><span>RUNS <b id="compute-requests">0</b></span><small id="footer-status">REMOTE GPU CALCULATIONS</small></section>
   </main>
   <script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
-  <script type="module" src="app.js?v=52"></script>
+  <script type="module" src="app.js?v=60"></script>
 </body>
 </html>

@@ -234,3 +234,40 @@ body[data-view="delta"] .comparison-metrics{grid-template-columns:repeat(3,1fr) 
 body[data-view="delta"] .playback{margin-top:14px;padding:18px 20px;background:#fff;border-color:var(--line)}
 body[data-view="delta"] .transport{flex-wrap:nowrap}body[data-view="delta"] .transport label{margin-left:auto}body[data-view="delta"] .transport button{background:#fff;border-color:#c7c8c5;color:#383c3e}body[data-view="delta"] .transport .play-button{background:#e4002b;border-color:#e4002b;color:#fff}body[data-view="delta"] #live-stream{border-color:#e4002b;color:#e4002b;background:#fff}
 body[data-view="delta"] .runtime-strip{display:none}
+
+/* Scenario Delta: race render left, decision evidence right */
+body[data-view="delta"] main{display:grid;grid-template-columns:minmax(0,1fr) 370px;grid-auto-rows:auto;column-gap:18px;align-items:start}
+body[data-view="delta"] .track-section,body[data-view="delta"] .sim-controls{grid-column:1/-1}
+body[data-view="delta"] .live-grid{display:contents;margin:0}
+body[data-view="delta"] .live-grid .track-panel{display:none}
+body[data-view="delta"] .metrics-rail{display:flex;grid-column:2;grid-row:3 / span 2;margin-top:18px;padding:18px;background:#fff;border:1px solid var(--line);gap:8px}
+body[data-view="delta"] .comparison-panel{grid-column:1;grid-row:3}
+body[data-view="delta"] .playback{grid-column:1;grid-row:4}
+body[data-view="delta"] .strategy-section{display:none}
+body[data-view="delta"] .metrics-heading{padding:3px 1px 12px;border-bottom:1px solid var(--line)}
+body[data-view="delta"] .metrics-heading .eyebrow{color:#111315}body[data-view="delta"] .metrics-heading>span:last-child{color:#8a8e90}
+body[data-view="delta"] .metric-card,body[data-view="delta"] .finish-card{padding:12px 13px;background:#f6f6f4;border-color:#dededb}
+body[data-view="delta"] .metric-card.primary{border-left:3px solid #e4002b}
+body[data-view="delta"] .metric-card span,body[data-view="delta"] .finish-card>span{color:#323638}body[data-view="delta"] .metric-card small{color:#898d8f}
+body[data-view="delta"] .metric-card>b{font-size:31px;margin:6px 0 5px;color:#e4002b}
+body[data-view="delta"] .metric-card .bar{background:#d9d9d6}body[data-view="delta"] .metric-card .bar i{background:#e4002b}
+body[data-view="delta"] .metric-card p{margin-top:6px;color:#777c7e;font-size:9px}
+body[data-view="delta"] .finish-card{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:14px}
+body[data-view="delta"] .finish-card strong{font-size:34px;margin:0;color:#111315}body[data-view="delta"] .finish-card .finish-bars,body[data-view="delta"] .finish-card p{grid-column:1/-1}
+body[data-view="delta"] .finish-bar i{background:#e4002b}body[data-view="delta"] .finish-bar span{color:#686d6f}
+body[data-view="delta"] .driver-card{display:none}
+.impact-panel{margin-top:2px;border-top:3px solid #111315;background:#fff}
+.impact-heading{display:flex;justify-content:space-between;align-items:center;padding:12px 2px 9px;color:#111315;font:700 9px var(--mono);letter-spacing:.09em}
+.impact-heading small{color:#85898b;font:600 8px var(--mono)}
+.impact-columns,.impact-row{display:grid;grid-template-columns:minmax(100px,1.4fr) .8fr .9fr .72fr;gap:8px;align-items:center}
+.impact-columns{padding:7px 8px;background:#111315;color:#fff;font:600 7px var(--mono);letter-spacing:.09em}
+.impact-row{min-height:38px;padding:0 8px;border-bottom:1px solid #e4e4e1;font:600 9px var(--mono)}
+.impact-row strong{color:#4b5052;font-size:8px;letter-spacing:.06em}.impact-row span{color:#6e7375;text-align:right}.impact-row b{color:#111315;text-align:right;font-weight:700}.impact-row b.changed{color:#e4002b}
+body[data-view="delta"] .comparison-heading{padding:0 0 15px;min-height:68px;border-bottom:1px solid var(--line)}
+body[data-view="delta"] .comparison-grid{margin-top:14px}
+body[data-view="delta"] .comparison-card{box-shadow:0 8px 24px #1113150a}
+body[data-view="delta"] .comparison-card.baseline{border-top:3px solid #111315}
+body[data-view="delta"] .comparison-visual{height:430px}
+body[data-view="delta"] .comparison-telemetry,body[data-view="delta"] .comparison-time{border-color:#4a5154;background:#080b0ddf}
+body[data-view="delta"] .visual-split-labels span{background:#080b0dcc;border-color:#4a5154}
+body[data-view="delta"] .comparison-metrics{min-height:60px}

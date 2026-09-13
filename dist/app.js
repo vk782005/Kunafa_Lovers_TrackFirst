@@ -135,6 +135,27 @@ function renderComparison() {
   $('scenario-delta').textContent = b.pass == null || n.pass == null ? 'WAITING FOR GPU BASELINE' : 'MODEL ADJUSTMENT · PASS ' + (delta(b.pass, n.pass) >= 0 ? '+' : '') + delta(b.pass, n.pass) + ' pts · DURABLE ' + (delta(b.durable, n.durable) >= 0 ? '+' : '') + delta(b.durable, n.durable) + ' pts · FINISH ' + (b.finish != null && n.finish != null ? (n.finish - b.finish >= 0 ? '+' : '') + (n.finish - b.finish).toFixed(1) + ' places' : '—');
   $('before-condition').textContent = conditionLabel(state.beforeControls);
   $('after-condition').textContent = conditionLabel(state.controls);
+  const setImpact = (name, baseValue, adjustedValue, format, deltaFormat) => {
+    const baseNode = $('impact-' + name + '-before'), adjustedNode = $('impact-' + name + '-after'), deltaNode = $('impact-' + name + '-delta');
+    if (!baseNode || !adjustedNode || !deltaNode) return;
+    baseNode.textContent = baseValue == null ? '—' : format(baseValue);
+    adjustedNode.textContent = adjustedValue == null ? '—' : format(adjustedValue);
+    const change = baseValue == null || adjustedValue == null ? null : adjustedValue - baseValue;
+    deltaNode.textContent = change == null ? '—' : deltaFormat(change);
+    deltaNode.classList.toggle('changed', change != null && Math.abs(change) > 0.0001);
+  };
+  const proportion = value => Math.round(Number(value) * 100) + '%';
+  const points = value => (value >= 0 ? '+' : '') + Math.round(value * 100) + ' pts';
+  const bState = before?.state || {}, aState = after?.state || {}, bConditions = bState.conditions || {}, aConditions = aState.conditions || {};
+  const bModel = before?.model || {}, aModel = after?.model || {};
+  setImpact('pass', bModel.physics_adjusted_pass60 ?? b.pass, aModel.physics_adjusted_pass60 ?? n.pass, proportion, points);
+  setImpact('grip', bConditions.grip_factor, aConditions.grip_factor, proportion, points);
+  setImpact('tyre', bConditions.tyre_fit, aConditions.tyre_fit, proportion, points);
+  setImpact('ers', bState.ers_fraction, aState.ers_fraction, proportion, points);
+  setImpact('fuel', bState.fuel_kg, aState.fuel_kg, value => Number(value).toFixed(0) + ' kg', value => (value >= 0 ? '+' : '') + Number(value).toFixed(0) + ' kg');
+  setImpact('confidence', before?.answers?.can_pass_within_60s?.confidence, after?.answers?.can_pass_within_60s?.confidence, proportion, points);
+  const sampleNode = $('impact-samples');
+  if (sampleNode) sampleNode.textContent = aModel.scenarios ? Number(aModel.scenarios).toLocaleString() + ' SCENARIOS' : '— SCENARIOS';
   renderComparisonViews();
 }
 function conditionLabel(controls) {
@@ -235,7 +256,7 @@ function renderFrame() {
   $('compute-telemetry').textContent = (state.frameIndex + 1) + ' FRAMES · ' + (track.zone || 'SECTOR') + ' · S' + (track.sector || 1);
   $('time-label').innerHTML = new Date((state.time || 0) * 1000).toISOString().slice(14, 19) + ' <span>/ 01:00</span>';
   $('timeline').value = state.time;
-  $('timeline').style.background = 'linear-gradient(to right,#b7f578 ' + (state.time / 60 * 100) + '%,#303b3d ' + (state.time / 60 * 100) + '%)';
+  $('timeline').style.background = 'linear-gradient(to right,#e4002b ' + (state.time / 60 * 100) + '%,#c8cac8 ' + (state.time / 60 * 100) + '%)';
   renderThree(frame); renderComparisonViews();
 }
 function frameAtTime(seconds) {
