@@ -294,13 +294,13 @@ body.details-collapsed[data-view="delta"] .playback{grid-column:1/-1}
 /* Track-only decision visualization */
 body[data-view="delta"] .track-only-label{padding:0 12px;color:#707577;font:700 8px var(--mono);letter-spacing:.11em;white-space:nowrap}
 body[data-view="delta"] .visual-split-labels{grid-template-columns:1fr}
-body[data-view="delta"] .overtake-cue{position:absolute;z-index:5;top:76px;left:50%;width:390px;transform:translateX(-50%);padding:15px 17px 13px;border:1px solid #4c3d2b;border-left:3px solid #ffad18;background:#101318ed;box-shadow:0 16px 34px #0008;color:#f3f3ef;pointer-events:none;animation:overtake-cue-in .2s ease-out}
+body[data-view="delta"] .overtake-cue{position:absolute;z-index:5;top:42px;right:18px;width:330px;padding:11px 13px 10px;border:1px solid #4c3d2b;border-left:3px solid #ffad18;background:#101318e8;box-shadow:0 10px 24px #0007;backdrop-filter:blur(8px);color:#f3f3ef;pointer-events:none;animation:overtake-cue-in .18s ease-out}
 body[data-view="delta"] .overtake-cue[hidden]{display:none}
-body[data-view="delta"] .overtake-cue::after{content:"";position:absolute;left:50%;bottom:-38px;width:1px;height:38px;background:linear-gradient(#ffad18,transparent)}
-body[data-view="delta"] .overtake-cue>span{display:block;margin-bottom:7px;color:#ffb62e;font:700 8px var(--mono);letter-spacing:.12em}
-body[data-view="delta"] .overtake-cue h3{margin:0 0 8px;color:#fff;font:700 17px var(--cond);letter-spacing:.025em}
-body[data-view="delta"] .overtake-cue p{margin:0;color:#c9ccca;font:10px/1.55 var(--mono)}
-body[data-view="delta"] .overtake-cue>div{margin-top:11px;padding-top:9px;border-top:1px solid #353a3d;color:#aeb4b2;font:700 8px var(--mono);letter-spacing:.07em;word-spacing:7px}
+body[data-view="delta"] .overtake-cue::after{content:"";position:absolute;right:42px;bottom:-22px;width:1px;height:22px;background:linear-gradient(#ffad18,transparent)}
+body[data-view="delta"] .overtake-cue>span{display:block;margin-bottom:5px;color:#ffb62e;font:700 7px var(--mono);letter-spacing:.11em}
+body[data-view="delta"] .overtake-cue h3{margin:0 0 5px;color:#fff;font:700 14px var(--cond);letter-spacing:.025em}
+body[data-view="delta"] .overtake-cue p{margin:0;color:#c9ccca;font:9px/1.4 var(--mono)}
+body[data-view="delta"] .overtake-cue>div{margin-top:7px;padding-top:6px;border-top:1px solid #353a3d;color:#aeb4b2;font:700 7px var(--mono);letter-spacing:.06em;word-spacing:4px}
 body[data-view="delta"] .overtake-cue[data-support="approved"]{border-color:#345242;border-left-color:#5ce08a}body[data-view="delta"] .overtake-cue[data-support="approved"]::after{background:linear-gradient(#5ce08a,transparent)}body[data-view="delta"] .overtake-cue[data-support="approved"]>span{color:#73e79b}
 body[data-view="delta"] .overtake-cue[data-support="conditional"]{border-left-color:#e4002b}body[data-view="delta"] .overtake-cue[data-support="conditional"]::after{background:linear-gradient(#e4002b,transparent)}body[data-view="delta"] .overtake-cue[data-support="conditional"]>span{color:#ff5c76}
-@keyframes overtake-cue-in{from{opacity:0;transform:translate(-50%,7px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes overtake-cue-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
