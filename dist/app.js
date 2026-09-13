@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=70';
+import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=82';
 
 const $ = (id) => document.getElementById(id);
 // The race terminal and GPU API are served by the same FastAPI origin. A
@@ -25,6 +25,8 @@ const state = {
   playing: false,
   rate: 1,
   view: 'circuit',
+  comparisonMode: 'split',
+  detailsCollapsed: false,
   connected: false,
   connectPromise: null,
   requestCount: 0,
@@ -348,7 +350,7 @@ function createZoneHighlights(scene, curve) {
   currentTrack.zones.forEach(zone => {
     const halfWidth = zone.type === 'Overtake' ? .022 : .014;
     const material = new THREE.MeshBasicMaterial({ color: zoneColor(zone), transparent: true, opacity: zone.type === 'Overtake' ? .72 : .38, side: THREE.DoubleSide, depthTest: true });
-    const strip = new THREE.Mesh(makeTrackRibbon(curve, zone.type === 'Overtake' ? 32 : 27, 18, zone.position - halfWidth, zone.position + halfWidth, .7), material);
+    const strip = new THREE.Mesh(makeTrackRibbon(curve, zone.type === 'Overtake' ? 15 : 11, 18, zone.position - halfWidth, zone.position + halfWidth, .7), material);
     strip.userData = { zoneId: zone.id, zoneType: zone.type, baseOpacity: material.opacity };
     group.add(strip);
     const markerMaterial = new THREE.MeshBasicMaterial({ color: zoneColor(zone), transparent: true, opacity: zone.type === 'Overtake' ? .9 : .4, side: THREE.DoubleSide });
@@ -371,16 +373,16 @@ function setActiveZone(group, activeId) {
   document.querySelectorAll('tr[data-zone]').forEach(row => row.classList.toggle('active', row.dataset.zone === activeId));
 }
 function updateTrackGeometry() {
-  trackRoad?.geometry.dispose(); trackRoad && (trackRoad.geometry = makeTrackRibbon(trackCurve, 34, 256, 0, 1, .1));
-  trackLine?.geometry.dispose(); trackLine && (trackLine.geometry = makeTrackRibbon(trackCurve, 42, 256, 0, 1, 0));
-  trackRacingLine?.geometry.dispose(); trackRacingLine && (trackRacingLine.geometry = makeTrackRibbon(trackCurve, 1.1, 320, 0, 1, .24));
+  trackRoad?.geometry.dispose(); trackRoad && (trackRoad.geometry = makeTrackRibbon(trackCurve, 13, 256, 0, 1, .1));
+  trackLine?.geometry.dispose(); trackLine && (trackLine.geometry = makeTrackRibbon(trackCurve, 19, 256, 0, 1, 0));
+  trackRacingLine?.geometry.dispose(); trackRacingLine && (trackRacingLine.geometry = makeTrackRibbon(trackCurve, .8, 320, 0, 1, .24));
   if (trackZoneGroup) { trackScene.remove(trackZoneGroup); trackZoneGroup.traverse(child => child.geometry?.dispose()); }
   trackZoneGroup = createZoneHighlights(trackScene, trackCurve);
   Object.values(comparisonViews).forEach(view => {
     if (!view) return;
-    view.road.geometry.dispose(); view.road.geometry = makeTrackRibbon(trackCurve, 32, 224, 0, 1, .1);
-    view.edge.geometry.dispose(); view.edge.geometry = makeTrackRibbon(trackCurve, 40, 224, 0, 1, 0);
-    view.racingLine.geometry.dispose(); view.racingLine.geometry = makeTrackRibbon(trackCurve, 1.05, 320, 0, 1, .24);
+    view.road.geometry.dispose(); view.road.geometry = makeTrackRibbon(trackCurve, 12, 224, 0, 1, .1);
+    view.edge.geometry.dispose(); view.edge.geometry = makeTrackRibbon(trackCurve, 18, 224, 0, 1, 0);
+    view.racingLine.geometry.dispose(); view.racingLine.geometry = makeTrackRibbon(trackCurve, .75, 320, 0, 1, .24);
     if (view.zoneGroup) { view.trackScene.remove(view.zoneGroup); view.zoneGroup.traverse(child => child.geometry?.dispose()); }
     view.zoneGroup = createZoneHighlights(view.trackScene, trackCurve);
   });
@@ -395,6 +397,34 @@ async function selectTrack(id) {
   $('sim-state').innerHTML = '<i class="live-dot"></i> LOADING PRECOMPUTED ' + next.name.toUpperCase() + ' BASELINE';
   updateTrackGeometry();
   await connectGpu(true);
+}
+
+function makeTrackMarker(color = '#e4002b', label = '31 OCO', primary = false) {
+  const marker = new THREE.Group(); marker.rotation.order = 'YXZ';
+  const ring = new THREE.Mesh(new THREE.RingGeometry(primary ? 6.2 : 5, primary ? 8.5 : 6.8, 36), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:primary ? .9 : .58, side:THREE.DoubleSide, depthTest:false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 1.2; marker.add(ring);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(primary ? 3.3 : 2.8, 28), new THREE.MeshBasicMaterial({ color:primary ? '#f5f5f2' : color, transparent:true, opacity:.96, side:THREE.DoubleSide, depthTest:false }));
+  core.rotation.x = -Math.PI / 2; core.position.y = 1.35; marker.add(core);
+  const pointerGeometry = new THREE.BufferGeometry();
+  pointerGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0,1.15,-14,-3.4,1.15,-6,3.4,1.15,-6],3));
+  pointerGeometry.setIndex([0,1,2]); pointerGeometry.computeVertexNormals();
+  const pointer = new THREE.Mesh(pointerGeometry, new THREE.MeshBasicMaterial({ color, transparent:true, opacity:.92, side:THREE.DoubleSide, depthTest:false })); marker.add(pointer);
+  const trail = new THREE.Mesh(new THREE.PlaneGeometry(primary ? 2.2 : 1.5, primary ? 22 : 16), new THREE.MeshBasicMaterial({ color, transparent:true, opacity:primary ? .18 : .1, side:THREE.DoubleSide, depthTest:false }));
+  trail.rotation.x = -Math.PI / 2; trail.position.set(0,.8,11); marker.add(trail);
+  const labelCanvas = document.createElement('canvas'); labelCanvas.width = 180; labelCanvas.height = 44;
+  const ctx = labelCanvas.getContext('2d'); ctx.clearRect(0,0,180,44); ctx.font = '700 19px monospace'; ctx.fillStyle = primary ? '#f4f5f2' : '#a5adb0'; ctx.fillText(label,8,28);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:new THREE.CanvasTexture(labelCanvas), transparent:true, depthTest:false }));
+  sprite.scale.set(34,8.3,1); sprite.position.set(23,3.2,0); marker.add(sprite);
+  marker.userData = { ring, core, pointer, trail, primary };
+  return marker;
+}
+
+function animateTrackMarker(marker, frame, offset = 0) {
+  if (!marker || !frame) return;
+  const pulse = 1 + Math.sin((frame.t || 0) * 5 + offset) * (marker.userData.primary ? .09 : .05);
+  marker.userData.ring.scale.setScalar(pulse);
+  marker.userData.ring.material.opacity = (marker.userData.primary ? .78 : .48) + Math.sin((frame.t || 0) * 5 + offset) * .12;
+  marker.userData.trail.scale.y = .72 + Math.min(1.3, (frame.kinematics?.speed_mps || 0) / 75) * .28;
 }
 
 function makeF1Car(primary = '#f1f1ef', secondary = '#15191b', scale = 1, accentColor = '#e6002d') {
@@ -531,16 +561,16 @@ function initThree() {
   trackRenderer = new THREE.WebGLRenderer({ canvas: trackCanvas, antialias: true, alpha: true });
   povRenderer = new THREE.WebGLRenderer({ canvas: povCanvas, antialias: true, alpha: false });
   [trackRenderer, povRenderer].forEach(r => { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25)); r.outputColorSpace = THREE.SRGBColorSpace; });
-  trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
+  trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#070a0f');
   trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
-  trackRoad = new THREE.Mesh(makeTrackRibbon(trackCurve, 34, 256, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#26363b', side: THREE.DoubleSide }));
-  trackLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 42, 256, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#829092', side: THREE.DoubleSide }));
-  trackRacingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 1.1, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#d7dad8', transparent:true, opacity:.48, side:THREE.DoubleSide }));
+  trackRoad = new THREE.Mesh(makeTrackRibbon(trackCurve, 13, 256, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#242a33', side: THREE.DoubleSide }));
+  trackLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 19, 256, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#3d4652', side: THREE.DoubleSide }));
+  trackRacingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, .8, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#aeb5ba', transparent:true, opacity:.5, side:THREE.DoubleSide }));
   const trackSun = new THREE.DirectionalLight('#ffffff', 2.2); trackSun.position.set(-180, 420, 130);
   trackScene.add(trackLine, trackRoad, trackRacingLine, new THREE.HemisphereLight('#ffffff', '#192024', 1.8), trackSun);
   trackZoneGroup = createZoneHighlights(trackScene, trackCurve);
-  carMesh = makeF1Car('#f1f1ef', '#151719', .78, '#e6002d');
-  oppMesh = makeF1Car('#343a3d', '#111315', .72, '#8d9699');
+  carMesh = makeTrackMarker('#e4002b', '31  OCO', true);
+  oppMesh = makeTrackMarker('#7d858b', '87  GAS', false);
   trackScene.add(carMesh, oppMesh);
   povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
   povCamera = new THREE.PerspectiveCamera(72, 1, .1, 2000);
@@ -559,20 +589,20 @@ function makeComparisonView(canvasId) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = false;
-  const trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
+  const trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#070a0f');
   const trackCamera = new THREE.OrthographicCamera(-340, 340, 245, -245, .1, 2000);
   trackCamera.position.set(0, 620, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
-  const road = new THREE.Mesh(makeTrackRibbon(trackCurve, 32, 224, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#26363b', side: THREE.DoubleSide }));
-  const edge = new THREE.Mesh(makeTrackRibbon(trackCurve, 40, 224, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#829092', side: THREE.DoubleSide }));
-  const racingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 1.05, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#d7dad8', transparent:true, opacity:.48, side:THREE.DoubleSide }));
+  const road = new THREE.Mesh(makeTrackRibbon(trackCurve, 12, 224, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#242a33', side: THREE.DoubleSide }));
+  const edge = new THREE.Mesh(makeTrackRibbon(trackCurve, 18, 224, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#3d4652', side: THREE.DoubleSide }));
+  const racingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, .75, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#aeb5ba', transparent:true, opacity:.5, side:THREE.DoubleSide }));
   const sun = new THREE.DirectionalLight('#ffffff', 2.25); sun.position.set(-170, 420, 150);
   trackScene.add(edge, road, racingLine, new THREE.HemisphereLight('#eef3f1', '#151a1c', 1.65), sun);
   const zoneGroup = createZoneHighlights(trackScene, trackCurve);
-  const trackCar = makeF1Car('#f1f1ef', '#151719', .62, '#e6002d');
-  const trackOpp = makeF1Car('#343a3d', '#111315', .56, '#8d9699');
+  const trackCar = makeTrackMarker('#e4002b', '31  OCO', true);
+  const trackOpp = makeTrackMarker('#7d858b', '87  GAS', false);
   trackScene.add(trackCar, trackOpp);
   const povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
-  const povCamera = new THREE.PerspectiveCamera(69, 1, .1, 2000);
+  const povCamera = new THREE.PerspectiveCamera(64, 1, .1, 2000);
   const motion = makeCockpit(povScene, povCamera, true);
   return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig: motion.rig, wheel: motion.wheel, motion, road, edge, racingLine, zoneGroup };
 }
@@ -584,11 +614,16 @@ function resizeThree() {
     if (!view) return;
     const box = view.canvas.getBoundingClientRect(), w = Math.max(260, box.width), h = Math.max(190, box.height);
     view.renderer.setSize(w, h, false);
-    const mapAspect = Math.max(.65, (w * .64) / h), halfExtent = 322;
-    if (mapAspect >= 1) { view.trackCamera.left = -halfExtent * mapAspect; view.trackCamera.right = halfExtent * mapAspect; view.trackCamera.top = halfExtent; view.trackCamera.bottom = -halfExtent; }
-    else { view.trackCamera.left = -halfExtent; view.trackCamera.right = halfExtent; view.trackCamera.top = halfExtent / mapAspect; view.trackCamera.bottom = -halfExtent / mapAspect; }
-    view.trackCamera.updateProjectionMatrix();
-    view.povCamera.aspect = Math.max(.62, (w * .36) / h); view.povCamera.updateProjectionMatrix();
+    const mode = state.comparisonMode || 'split';
+    const mapWidth = mode === 'track' ? w : mode === 'pov' ? 0 : w * .5;
+    const povWidth = mode === 'pov' ? w : mode === 'track' ? 0 : w * .5;
+    if (mapWidth) {
+      const mapAspect = Math.max(.65, mapWidth / h), halfExtent = 322;
+      if (mapAspect >= 1) { view.trackCamera.left = -halfExtent * mapAspect; view.trackCamera.right = halfExtent * mapAspect; view.trackCamera.top = halfExtent; view.trackCamera.bottom = -halfExtent; }
+      else { view.trackCamera.left = -halfExtent; view.trackCamera.right = halfExtent; view.trackCamera.top = halfExtent / mapAspect; view.trackCamera.bottom = -halfExtent / mapAspect; }
+      view.trackCamera.updateProjectionMatrix();
+    }
+    if (povWidth) { view.povCamera.aspect = Math.max(.62, povWidth / h); view.povCamera.updateProjectionMatrix(); }
   });
   renderComparisonViews();
 }
@@ -597,10 +632,7 @@ function renderThree(frame) {
   const s = (frame.track?.s_m || 0) / (frame.track?.length_m || 5278), gap = frame.race?.gap_ahead_s || .5;
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame.kinematics?.speed_mps || 70) / currentTrack.lengthM));
   placeCarOnTrack(carMesh, s, 4, frame); placeCarOnTrack(oppMesh, s + gapProgress, 4, frame);
-  const wheelSpin = -(frame.track?.s_m || 0) / 4.1;
-  carMesh.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin; });
-  carMesh.userData.frontWheels?.forEach(w => { w.rotation.y = (frame.kinematics?.steering_rad || 0) * .7; });
-  oppMesh.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
+  animateTrackMarker(carMesh, frame, 0); animateTrackMarker(oppMesh, frame, 1.7);
   animateCockpit(povMotion, povCamera, frame, false);
   setActiveZone(trackZoneGroup, frame.track?.zone);
   if (state.view === 'pov') povRenderer.render(povScene, povCamera); else trackRenderer.render(trackScene, trackCamera);
@@ -628,22 +660,56 @@ function setComparisonTelemetry(prefix, frame) {
 function renderComparisonView(view, frame, side) {
   if (!view) return;
   const renderer = view.renderer, canvas = view.canvas;
-  const width = canvas.width || 520, height = canvas.height || 240, trackWidth = Math.floor(width * .64);
-  renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
-  renderer.setViewport(0, 0, trackWidth, height); renderer.setScissor(0, 0, trackWidth, height);
+  // WebGLRenderer viewport coordinates are CSS pixels. Using canvas.width here
+  // applied devicePixelRatio twice and cropped the POV on high-density screens.
+  const width = Math.max(1, Math.floor(canvas.clientWidth || 520));
+  const height = Math.max(1, Math.floor(canvas.clientHeight || 240));
+  const mode = state.comparisonMode || 'split';
   const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame?.kinematics?.speed_mps || 70) / currentTrack.lengthM));
   placeCarOnTrack(view.trackCar, s, 4, frame); placeCarOnTrack(view.trackOpp, s + gapProgress, 4, frame);
-  const wheelSpin = -(frame?.track?.s_m || 0) / 4.1;
-  view.trackCar.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin; });
-  view.trackCar.userData.frontWheels?.forEach(w => { w.rotation.y = (frame?.kinematics?.steering_rad || 0) * .7; });
-  view.trackOpp.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
+  animateTrackMarker(view.trackCar, frame, 0); animateTrackMarker(view.trackOpp, frame, 1.7);
   setActiveZone(view.zoneGroup, frame?.track?.zone);
-  renderer.render(view.trackScene, view.trackCamera);
-  renderer.setViewport(trackWidth, 0, width - trackWidth, height); renderer.setScissor(trackWidth, 0, width - trackWidth, height);
-  animateCockpit(view.motion, view.povCamera, frame, true);
-  renderer.render(view.povScene, view.povCamera);
+  renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
+  if (mode !== 'pov') {
+    const mapWidth = mode === 'track' ? width : Math.floor(width * .5);
+    renderer.setViewport(0, 0, mapWidth, height); renderer.setScissor(0, 0, mapWidth, height);
+    renderer.render(view.trackScene, view.trackCamera);
+  }
+  if (mode !== 'track') {
+    const povX = mode === 'pov' ? 0 : Math.floor(width * .5);
+    const povWidth = mode === 'pov' ? width : width - povX;
+    renderer.setViewport(povX, 0, povWidth, height); renderer.setScissor(povX, 0, povWidth, height);
+    animateCockpit(view.motion, view.povCamera, frame, true);
+    renderer.render(view.povScene, view.povCamera);
+  }
   renderer.setScissorTest(false);
+}
+function syncComparisonLayout() {
+  document.body.dataset.raceView = state.comparisonMode;
+  document.body.classList.toggle('details-collapsed', state.detailsCollapsed);
+  document.querySelectorAll('.race-view-switch [data-race-view]').forEach(button => {
+    const active = button.dataset.raceView === state.comparisonMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  const toggle = $('details-toggle');
+  if (toggle) {
+    toggle.textContent = state.detailsCollapsed ? 'SHOW DETAILS' : 'HIDE DETAILS';
+    toggle.setAttribute('aria-expanded', String(!state.detailsCollapsed));
+  }
+  requestAnimationFrame(() => { resizeThree(); renderComparisonViews(); });
+}
+function setComparisonMode(mode) {
+  if (!['split', 'track', 'pov'].includes(mode)) return;
+  state.comparisonMode = mode;
+  // POV is the inspection mode: give the render the full workspace immediately.
+  state.detailsCollapsed = mode === 'pov';
+  syncComparisonLayout();
+}
+function toggleDetails() {
+  state.detailsCollapsed = !state.detailsCollapsed;
+  syncComparisonLayout();
 }
 function setView(view) {
   state.view = view; $('visual-wrap').classList.toggle('pov-mode', view === 'pov'); $('view-label').textContent = view === 'pov' ? 'DRIVER POV' : 'CIRCUIT VIEW';
@@ -729,6 +795,8 @@ function tick(now) {
 
 $('circuit-view').addEventListener('click', () => setView('circuit'));
 $('pov-view-button').addEventListener('click', () => setView('pov'));
+document.querySelectorAll('.race-view-switch [data-race-view]').forEach(button => button.addEventListener('click', () => setComparisonMode(button.dataset.raceView)));
+$('details-toggle')?.addEventListener('click', toggleDetails);
 $('play').addEventListener('click', playToggle);
 $('reset').addEventListener('click', () => { state.playing = false; seek(0); });
 $('back').addEventListener('click', () => seek(state.time - 5));
@@ -748,7 +816,7 @@ const context = document.modelContext;
 if (context?.registerTool) { try { context.registerTool({ name: 'configure_race_replay', title: 'Configure GPU race replay', description: 'Seek the remote GPU Overtiq replay and set playback state.', inputSchema: { type: 'object', properties: { seconds: { type: 'number', minimum: 0, maximum: 60 }, playing: { type: 'boolean' } }, required: ['seconds', 'playing'], additionalProperties: false }, execute(input) { seek(input.seconds); state.playing = input.playing; return { seconds: state.time, driver: 'OCO', playing: state.playing, gpuBacked: state.connected }; } }); } catch {} }
 
 try {
-  initThree(); limitTrackSelector(); syncControlInputs(); clearLiveState(); renderTrackInfo(); requestAnimationFrame(tick);
+  initThree(); syncComparisonLayout(); limitTrackSelector(); syncControlInputs(); clearLiveState(); renderTrackInfo(); requestAnimationFrame(tick);
   if (!state.apiBase) state.apiBase = location.origin;
   window.__overtiqBoot = { apiBase: state.apiBase, sameOrigin: state.apiBase === location.origin };
   connectGpu(true);

@@ -275,3 +275,32 @@ body[data-view="delta"] .visual-split-labels span{background:#080b0dcc;border-co
 body[data-view="delta"] .comparison-metrics{min-height:60px}
 body[data-view="delta"] .metrics-rail{position:sticky;top:18px}
 .geometry-badge{padding:6px 8px;border:1px solid #c5c6c3;color:#6e7375;background:#fff;font:650 8px var(--mono);letter-spacing:.08em;white-space:nowrap}
+
+/* Desktop race-view workspace */
+body[data-view="delta"] .comparison-title{display:flex;align-items:baseline;gap:18px;min-width:0}
+body[data-view="delta"] .comparison-title .eyebrow{flex:0 0 auto;margin:0}
+body[data-view="delta"] .comparison-title h2{flex:0 0 auto;margin:0}
+body[data-view="delta"] .comparison-title #scenario-delta{overflow:hidden;color:#8a2b3d;font:600 8px var(--mono);letter-spacing:.035em;text-overflow:ellipsis;white-space:nowrap}
+body[data-view="delta"] .comparison-tools{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+body[data-view="delta"] .race-view-switch{display:flex;align-items:center;border:1px solid #bfc0bd;background:#fff}
+body[data-view="delta"] .race-view-switch button,
+body[data-view="delta"] .details-toggle{height:36px;padding:0 14px;border:0;background:#fff;color:#555a5c;font:700 8px var(--mono);letter-spacing:.1em;cursor:pointer;white-space:nowrap}
+body[data-view="delta"] .race-view-switch button+button{border-left:1px solid #d4d4d1}
+body[data-view="delta"] .race-view-switch button:hover,
+body[data-view="delta"] .details-toggle:hover{background:#f0f0ed;color:#111315}
+body[data-view="delta"] .race-view-switch button.active{background:#e4002b;color:#fff}
+body[data-view="delta"] .details-toggle{border:1px solid #111315;color:#111315}
+body[data-view="delta"] .comparison-visual{height:500px}
+body[data-view="delta"] .visual-split-labels{grid-template-columns:1fr 1fr}
+body[data-view="delta"] .visual-split-labels span:first-child{text-align:left}
+body[data-view="delta"] .visual-split-labels span:last-child{text-align:left}
+body[data-race-view="track"] .visual-split-labels,
+body[data-race-view="pov"] .visual-split-labels{grid-template-columns:1fr}
+body[data-race-view="track"] .visual-split-labels span:last-child,
+body[data-race-view="pov"] .visual-split-labels span:first-child{display:none}
+body[data-race-view="pov"] .comparison-visual{height:620px}
+body[data-race-view="pov"] .comparison-card{border-top-color:#e4002b}
+body.details-collapsed[data-view="delta"] main{grid-template-columns:minmax(0,1fr) 0}
+body.details-collapsed[data-view="delta"] .metrics-rail{display:none}
+body.details-collapsed[data-view="delta"] .comparison-panel,
+body.details-collapsed[data-view="delta"] .playback{grid-column:1/-1}
