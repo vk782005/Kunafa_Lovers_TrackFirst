@@ -299,6 +299,7 @@ body[data-race-view="pov"] .visual-split-labels{grid-template-columns:1fr}
 body[data-race-view="track"] .visual-split-labels span:last-child,
 body[data-race-view="pov"] .visual-split-labels span:first-child{display:none}
 body[data-race-view="pov"] .comparison-visual{height:620px}
+body[data-race-view="track"] .comparison-visual{height:620px}
 body[data-race-view="pov"] .comparison-card{border-top-color:#e4002b}
 body.details-collapsed[data-view="delta"] main{grid-template-columns:minmax(0,1fr) 0}
 body.details-collapsed[data-view="delta"] .metrics-rail{display:none}
