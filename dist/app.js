@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import { DEFAULT_TRACK_ID, formatTrackLength, getTrack, trackOptions } from './track-data.js?v=24';
+import { formatTrackLength, getTrack } from './track-data.js?v=25';
 
 const $ = (id) => document.getElementById(id);
 // The race terminal and GPU API are served by the same FastAPI origin. A
@@ -9,7 +9,10 @@ const API_DEFAULT = new URLSearchParams(location.search).get('api') || location.
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const SNAPSHOT_KEY = 'overtiq-gpu-snapshot-v1';
 const TRACK_PREF_KEY = 'overtiq-track-id-v1';
-const SAVED_TRACK_ID = getTrack(sessionStorage.getItem(TRACK_PREF_KEY) || DEFAULT_TRACK_ID).id;
+const FOCUS_TRACK_IDS = new Set(['MCO', 'ITA']);
+const UI_DEFAULT_TRACK_ID = 'MCO';
+const savedTrack = sessionStorage.getItem(TRACK_PREF_KEY) || 'MCO';
+const SAVED_TRACK_ID = FOCUS_TRACK_IDS.has(savedTrack) ? savedTrack : UI_DEFAULT_TRACK_ID;
 const state = {
   apiBase: API_DEFAULT.replace(/\/$/, ''),
   apiKey: sessionStorage.getItem('overtiq-key') || API_KEY_DEFAULT,
@@ -112,12 +115,12 @@ function requestPayload(decision = state.decision) {
 }
 function scenarioKey(decision = state.decision, controls = state.controls) { return JSON.stringify({ decision, ...controls }); }
 function controlsFromInputs() {
-  state.controls = { track_id: $('track-select')?.value || state.controls.track_id || DEFAULT_TRACK_ID, weather: $('weather').value, tire_compound: $('tyre-compound').value, rain_intensity: Number($('rain-intensity').value) / 100,
+  state.controls = { track_id: $('track-select')?.value || state.controls.track_id || UI_DEFAULT_TRACK_ID, weather: $('weather').value, tire_compound: $('tyre-compound').value, rain_intensity: Number($('rain-intensity').value) / 100,
     ers_fraction: Number($('ers-fraction').value) / 100, fuel_kg: Number($('fuel-kg').value), vsc: $('vsc-toggle').dataset.active === 'true', red_flag: $('red-flag-toggle').dataset.active === 'true' };
   $('rain-value').textContent = Math.round(state.controls.rain_intensity * 100) + '%'; $('ers-value').textContent = Math.round(state.controls.ers_fraction * 100) + '%'; $('fuel-value').textContent = Math.round(state.controls.fuel_kg) + ' kg';
 }
 function syncControlInputs() {
-  if ($('track-select')) $('track-select').value = state.controls.track_id || DEFAULT_TRACK_ID;
+  if ($('track-select')) $('track-select').value = FOCUS_TRACK_IDS.has(state.controls.track_id) ? state.controls.track_id : UI_DEFAULT_TRACK_ID;
   $('weather').value = state.controls.weather; $('tyre-compound').value = state.controls.tire_compound;
   $('rain-intensity').value = Math.round(state.controls.rain_intensity * 100); $('ers-fraction').value = Math.round(state.controls.ers_fraction * 100); $('fuel-kg').value = Math.round(state.controls.fuel_kg);
   $('rain-value').textContent = Math.round(state.controls.rain_intensity * 100) + '%'; $('ers-value').textContent = Math.round(state.controls.ers_fraction * 100) + '%'; $('fuel-value').textContent = Math.round(state.controls.fuel_kg) + ' kg';
@@ -158,8 +161,8 @@ function restoreSnapshot() {
     state.assessment = snapshot.assessment; state.beforeAssessment = snapshot.beforeAssessment || snapshot.assessment;
     state.zones = snapshot.zones || []; state.beforeControls = snapshot.beforeControls || snapshot.controls || null; state.requestCount = snapshot.requestCount || 1;
     state.controls = snapshot.controls || state.controls;
-    sessionStorage.setItem(TRACK_PREF_KEY, state.controls.track_id || DEFAULT_TRACK_ID);
-    const restoredTrack = getTrack(state.controls.track_id || DEFAULT_TRACK_ID);
+    sessionStorage.setItem(TRACK_PREF_KEY, state.controls.track_id || UI_DEFAULT_TRACK_ID);
+    const restoredTrack = getTrack(FOCUS_TRACK_IDS.has(state.controls.track_id) ? state.controls.track_id : UI_DEFAULT_TRACK_ID);
     if (restoredTrack.id !== currentTrack.id) { currentTrack = restoredTrack; trackCurve = makeTrackCurve(currentTrack); updateTrackGeometry(); }
     state.scenarioKey = snapshot.scenarioKey || scenarioKey();
     state.assessmentCache.set(state.scenarioKey, { assessment: state.assessment, frames: state.frames });
@@ -294,6 +297,10 @@ function renderTrackInfo() {
   if (meta) meta.textContent = currentTrack.country + ' · ' + currentTrack.name + ' · ' + formatTrackLength(currentTrack.lengthM) + ' · ' + currentTrack.laps + ' LAPS';
   const profile = $('track-profile');
   if (profile) profile.textContent = currentTrack.profile;
+  const stressHeading = document.querySelector('.sim-heading h2');
+  if (stressHeading) stressHeading.textContent = 'Stress the ' + currentTrack.name + ' decision model';
+  const trackLabel = $('track-select')?.parentElement?.firstChild;
+  if (trackLabel && trackLabel.nodeType === Node.TEXT_NODE) trackLabel.textContent = 'ACTIVE TRACK';
   const info = $('track-zone-count');
   if (info) info.textContent = currentTrack.zones.filter(z => z.type === 'Overtake').length + ' OVERTAKE WINDOWS · ' + currentTrack.zones.length + ' DECISION ZONES';
   const laps = $('lap-count');
@@ -307,6 +314,12 @@ function renderTrackInfo() {
     const windows = currentTrack.zones.filter(zone => zone.type === 'Overtake').slice(0, 3);
     ticks.innerHTML = ['L35', ...windows.map(zone => 'ZONE ' + zone.id), 'L38'].map(label => '<span>' + label + '</span>').join('');
   }
+}
+function limitTrackSelector() {
+  const select = $('track-select');
+  if (!select) return;
+  Array.from(select.options).forEach(option => { if (!FOCUS_TRACK_IDS.has(option.value)) option.remove(); });
+  select.value = FOCUS_TRACK_IDS.has(state.controls.track_id) ? state.controls.track_id : UI_DEFAULT_TRACK_ID;
 }
 function zoneColor(zone) { return zone.type === 'Overtake' ? '#f479a2' : '#d6b555'; }
 function createZoneHighlights(scene, curve) {
@@ -679,7 +692,7 @@ const context = document.modelContext;
 if (context?.registerTool) { try { context.registerTool({ name: 'configure_race_replay', title: 'Configure GPU race replay', description: 'Seek the remote GPU Overtiq replay and set playback state.', inputSchema: { type: 'object', properties: { seconds: { type: 'number', minimum: 0, maximum: 60 }, playing: { type: 'boolean' } }, required: ['seconds', 'playing'], additionalProperties: false }, execute(input) { seek(input.seconds); state.playing = input.playing; return { seconds: state.time, driver: 'OCO', playing: state.playing, gpuBacked: state.connected }; } }); } catch {} }
 
 try {
-  initThree(); syncControlInputs(); clearLiveState(); renderTrackInfo(); requestAnimationFrame(tick);
+  initThree(); limitTrackSelector(); syncControlInputs(); clearLiveState(); renderTrackInfo(); requestAnimationFrame(tick);
   if (!state.apiBase) state.apiBase = location.origin;
   window.__overtiqBoot = { apiBase: state.apiBase, sameOrigin: state.apiBase === location.origin };
   connectGpu(true);
