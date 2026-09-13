@@ -240,7 +240,7 @@ async function connectGpu(force = false) {
       $('data-note').textContent = 'Precomputed race baseline loaded · GPU ready for an adjusted scenario';
       $('compute-requests').textContent = '0 LIVE RUNS'; $('sim-state').innerHTML = '<i class="live-dot"></i> BASELINE READY · GPU IDLE';
       $('live-stream').textContent = 'BASELINE LOADED'; $('live-stream').disabled = true;
-      state.playing = true; $('play').textContent = 'Ⅱ';
+      resetPlaybackToStart();
       // Rendering is presentation work. Once bootstrap returned 200, a
       // renderer failure must never be reclassified as a GPU connection
       // failure or schedule another POST.
@@ -696,6 +696,12 @@ function toggleDetails() {
   syncComparisonLayout();
 }
 function seek(seconds) { state.time = Math.max(0, Math.min(60, seconds)); state.frameIndex = state.frames.length ? Math.min(state.frames.length - 1, Math.round(state.time / .25)) : 0; renderFrame(); }
+function resetPlaybackToStart() {
+  state.playing = false;
+  state.time = 0;
+  state.frameIndex = 0;
+  $('play').textContent = '▶';
+}
 function playToggle() { state.playing = !state.playing; $('play').textContent = state.playing ? 'Ⅱ' : '▶'; }
 function scheduleStreamReconnect() {
   if (state.streamTimer || state.httpAbort || state.stream || !state.connected || !state.streamWanted) return;
@@ -750,7 +756,7 @@ async function applyScenario() {
   if (!state.connected) { $('scenario-result').textContent = 'FAILED · GPU baseline is not ready.'; return; }
   if (state.assessmentCache.has(key)) {
     const cached = state.assessmentCache.get(key); state.assessment = cached.assessment || cached; if (cached.frames) state.frames = cached.frames;
-    state.scenarioKey = key; renderAssessment(); renderComparison(); $('scenario-result').textContent = 'NO CUDA RUN NEEDED · this exact scenario is already loaded'; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO READY · CACHED'; return;
+    state.scenarioKey = key; resetPlaybackToStart(); renderAssessment(); renderComparison(); renderFrame(); $('scenario-result').textContent = 'NO CUDA RUN NEEDED · this exact scenario is already loaded'; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO READY · CACHED'; return;
   }
   if (state.assessmentPromise) return state.assessmentPromise;
   const started = performance.now();
@@ -763,7 +769,7 @@ async function applyScenario() {
     const ans = result.answers || {}; const cond = [state.controls.weather, state.controls.tire_compound, state.controls.vsc ? 'VSC' : '', state.controls.red_flag ? 'RED FLAG' : ''].filter(Boolean).join(' · ');
     $('scenario-result').className = 'scenario-result success'; $('scenario-result').textContent = 'COMPLETE · ' + elapsed + ' ms · ' + (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Number(ans.finish_position.expected).toFixed(1)) + (cond ? ' · ' + cond : '');
     $('sim-state').innerHTML = '<i class="live-dot"></i> COMPLETE · ADJUSTED SCENARIO LOADED';
-    state.playing = true; $('play').textContent = 'Ⅱ';
+    resetPlaybackToStart(); renderFrame();
   }).catch(error => { setStatus('GPU ERROR', false); $('scenario-result').className = 'scenario-result failed'; $('scenario-result').textContent = 'FAILED · ' + error.message; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO FAILED'; }).finally(() => { state.assessmentPromise = null; $('apply-scenario').disabled = false; $('apply-scenario').textContent = 'APPLY TO GPU SIMULATOR'; });
   return state.assessmentPromise;
 }
