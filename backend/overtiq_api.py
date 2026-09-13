@@ -462,7 +462,18 @@ def _simulate_gpu_uncached(req: SimulationRequest, include_frames: bool = True) 
     probs = {"gain3": float(within_3.float().mean().item()), "pass60": float(within_60.float().mean().item()), "durable": float(durable.float().mean().item())}
     standard_error = {name: math.sqrt(max(value * (1.0 - value), 0.0) / n) for name, value in probs.items()}
     quantiles = torch.quantile(finish, torch.as_tensor([0.1, 0.25, 0.5, 0.75, 0.9], device=device)).detach().cpu().tolist()
-    return frames, {"probs": probs, "finish": {"expected": float(finish.mean().item()), "quantiles": quantiles}, "gpu_ms": gpu_ms, "scenarios": n,
+    # Race positions are discrete outcomes. Use a GPU histogram to expose the
+    # most-likely integer position while retaining the arithmetic mean for
+    # audit and calibration work. The frontend should never infer a mode by
+    # counting rounded quantiles because quantiles are not frequencies.
+    finish_positions = torch.clamp(torch.round(finish), 1, 20).to(torch.int64)
+    counts = torch.bincount(finish_positions, minlength=21)[1:]
+    most_likely = int(torch.argmax(counts).item() + 1)
+    histogram = [{"position": position, "probability": float(counts[position - 1].float().div(max(1, n)).item())}
+                 for position in range(1, 21) if int(counts[position - 1].item()) > 0]
+    finish_mean = float(finish.mean().item())
+    return frames, {"probs": probs, "finish": {"expected": most_likely, "most_likely": most_likely, "mean": finish_mean,
+                    "quantiles": quantiles, "histogram": histogram}, "gpu_ms": gpu_ms, "scenarios": n,
                     "monte_carlo_standard_error": standard_error, "calibrated_zone_probability": calibrated_zone_probability,
                     "physics_adjusted_pass60": target_pass60, "conditional_durability_probability": durability_probability,
                     "final_speed_mps": float(speed.mean().item()), "final_gap_s": float(gap.mean().item()), "final_ers": float(battery.mean().item()),
@@ -536,7 +547,7 @@ def assess(req: SimulationRequest, include_frames: bool = False) -> dict[str, An
             "decision": req.decision, "answers": {"can_gain_position_within_3_laps": {"probability": p["gain3"], "confidence": conf, "cutoff_lap": req.lap + 3, "evidence": evidence(req, stats, "3-lap position gain")},
                        "can_pass_within_60s": {"probability": p["pass60"], "confidence": conf, "window_s": 60, "evidence": evidence(req, stats, "60-second pass")},
                        "durable_pass": {"probability": p["durable"], "confidence": conf, "laps_ahead": 3, "evidence": evidence(req, stats, "durable pass")},
-                       "finish_position": {"expected": stats["finish"]["expected"], "distribution": stats["finish"]["quantiles"], "quantiles": [0.1, 0.25, 0.5, 0.75, 0.9], "evidence": evidence(req, stats, "race finish")}},
+                       "finish_position": {"expected": stats["finish"]["expected"], "most_likely": stats["finish"]["most_likely"], "mean": stats["finish"]["mean"], "distribution": stats["finish"]["quantiles"], "histogram": stats["finish"]["histogram"], "quantiles": [0.1, 0.25, 0.5, 0.75, 0.9], "evidence": evidence(req, stats, "race finish")}},
             "recommendation": {"action": recommendation, "confidence": conf, "rationale": f"{p['pass60']:.0%} modeled pass chance in the active zone; {p['durable']:.0%} remains ahead three laps later." if not req.red_flag else "Red flag active: racing is neutralized and the model holds position.", "override_allowed": True},
             "model": {"decision_baseline": "v4-logistic", "decision_validation": DECISION_MODEL.get("zone_loco"), "calibrated_zone_probability": stats["calibrated_zone_probability"], "physics_adjusted_pass60": stats["physics_adjusted_pass60"], "forecaster": FORECASTER.version, "forecaster_output": {"horizons_s": [1, 2, 3, 4, 5], "predicted_speed_mps": forecast}, "simulator": SERVICE_VERSION, "device": torch.cuda.get_device_name(0), "gpu_ms": stats["gpu_ms"], "scenarios": stats["scenarios"], "monte_carlo_standard_error": stats["monte_carlo_standard_error"]},
             "state": {"gap_ahead_s": req.gap_ahead_s, "speed_kph": req.speed_mps * 3.6, "ers_fraction": req.ers_fraction, "fuel_kg": req.fuel_kg, "weather": req.weather, "rain_intensity": req.rain_intensity, "tire_compound": req.tire_compound, "vsc": bool(req.vsc or req.safety_car), "red_flag": req.red_flag, "conditions": stats.get("conditions"), "data_quality": "simulated_gpu"},

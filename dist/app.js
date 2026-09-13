@@ -153,7 +153,7 @@ function syncControlInputs() {
 }
 function renderComparison() {
   const before = state.beforeAssessment || null, after = state.assessment || null;
-  const summary = (a) => { const x = a?.answers || {}; return { pass: x.can_pass_within_60s?.probability ?? null, durable: x.durable_pass?.probability ?? null, gain: x.can_gain_position_within_3_laps?.probability ?? null, finish: x.finish_position?.expected ?? null, action: a?.recommendation?.action || '—' }; };
+  const summary = (a) => { const x = a?.answers || {}; return { pass: x.can_pass_within_60s?.probability ?? null, durable: x.durable_pass?.probability ?? null, gain: x.can_gain_position_within_3_laps?.probability ?? null, finish: finishPosition(a), action: a?.recommendation?.action || '—' }; };
   const b = summary(before), n = summary(after), delta = (x, y) => Math.round((y - x) * 100);
   $('before-action').textContent = b.action; $('before-pass').textContent = fmtPct(b.pass); $('before-durable').textContent = fmtPct(b.durable); $('before-finish').textContent = b.finish == null ? '—' : 'P' + Math.round(Number(b.finish));
   $('after-action').textContent = n.action; $('after-pass').textContent = fmtPct(n.pass); $('after-durable').textContent = fmtPct(n.durable); $('after-finish').textContent = n.finish == null ? '—' : 'P' + Math.round(Number(n.finish));
@@ -187,6 +187,15 @@ function conditionLabel(controls) {
   if (!controls) return 'WAITING FOR GPU';
   const flags = controls.red_flag ? 'RED FLAG' : controls.vsc ? 'VSC' : 'GREEN';
   return [controls.weather || 'DRY', controls.tire_compound || 'MEDIUM', flags].join(' · ');
+}
+function finishPosition(assessment) {
+  const finish = assessment?.answers?.finish_position || {};
+  if (finish.most_likely != null) return Math.round(Number(finish.most_likely));
+  if (finish.expected != null) return Math.round(Number(finish.expected));
+  const histogram = Array.isArray(finish.histogram) ? finish.histogram : [];
+  if (histogram.length) return Math.round(Number(histogram.reduce((best, item) => Number(item.probability || 0) > Number(best.probability || 0) ? item : best, histogram[0]).position));
+  const unique = [...new Set((finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite))];
+  return unique.length ? unique[Math.floor(unique.length / 2)] : null;
 }
 function clearLiveState() {
   state.frames = []; state.beforeFrames = []; state.zones = []; state.assessment = null; state.beforeAssessment = null; state.beforeControls = null; state.connected = false; state.time = 0; state.frameIndex = 0;
@@ -308,10 +317,12 @@ function renderAssessment() {
     $('answer-' + id).textContent = pct; $('bar-' + id).style.width = (item.probability || 0) * 100 + '%';
     const e = item.evidence || {}; $('evidence-' + id).textContent = [e.zone || 'active zone', e.gap_s != null ? e.gap_s.toFixed(2) + 's gap' : '', e.speed_kph ? Math.round(e.speed_kph) + ' km/h' : '', e.simulator || ''].filter(Boolean).join(' · ');
   });
-  const finish = answers.finish_position || {}; $('finish-expected').textContent = finish.expected == null ? '—' : 'P' + Math.round(Number(finish.expected));
+  const finish = answers.finish_position || {}, projected = finishPosition(a); $('finish-expected').textContent = projected == null ? '—' : 'P' + projected;
   $('finish-note').textContent = a?.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'Waiting for the remote GPU assessment.';
-  const vals = finish.distribution || [];
-  $('finish-bars').innerHTML = vals.map((value, i) => '<div class="finish-bar"><span>P' + Number(value).toFixed(0) + '</span><i style="width:' + Math.max(12, 100 - i * 15) + '%"></i></div>').join('');
+  const histogram = Array.isArray(finish.histogram) ? finish.histogram.slice().sort((left, right) => Number(right.probability || 0) - Number(left.probability || 0)).slice(0, 5) : [];
+  const values = histogram.length ? histogram : [...new Set((finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite))].map((position, i, all) => ({ position, probability: (all.length - i) / all.length }));
+  const maxProbability = Math.max(0.0001, ...values.map(value => Number(value.probability || 0)));
+  $('finish-bars').innerHTML = values.map(value => '<div class="finish-bar"><span>P' + Math.round(Number(value.position)) + '</span><i style="width:' + Math.max(16, Math.round(Number(value.probability || 0) / maxProbability * 100)) + '%"></i></div>').join('');
   // The first render happens before bootstrap returns. Guard the assessment
   // object itself so a refresh cannot abort startup before connectGpu runs.
   $('assessment-time').textContent = a?.model?.gpu_ms != null ? Math.round(a.model.gpu_ms) + ' ms GPU' : 'REMOTE COMPUTE';
