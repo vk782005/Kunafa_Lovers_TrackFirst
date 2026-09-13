@@ -297,10 +297,10 @@ function renderTrackInfo() {
   if (meta) meta.textContent = currentTrack.country + ' · ' + currentTrack.name + ' · ' + formatTrackLength(currentTrack.lengthM) + ' · ' + currentTrack.laps + ' LAPS';
   const profile = $('track-profile');
   if (profile) profile.textContent = currentTrack.profile;
-  const stressHeading = document.querySelector('.sim-heading h2');
-  if (stressHeading) stressHeading.textContent = 'Stress the ' + currentTrack.name + ' decision model';
+  const scenarioHeading = document.querySelector('.sim-heading h2');
+  if (scenarioHeading) scenarioHeading.textContent = currentTrack.name + ' scenario inputs';
   const trackLabel = $('track-select')?.parentElement?.firstChild;
-  if (trackLabel && trackLabel.nodeType === Node.TEXT_NODE) trackLabel.textContent = 'ACTIVE TRACK';
+  if (trackLabel && trackLabel.nodeType === Node.TEXT_NODE) trackLabel.textContent = 'TRACK';
   const info = $('track-zone-count');
   if (info) info.textContent = currentTrack.zones.filter(z => z.type === 'Overtake').length + ' OVERTAKE WINDOWS · ' + currentTrack.zones.length + ' DECISION ZONES';
   const laps = $('lap-count');
@@ -321,7 +321,7 @@ function limitTrackSelector() {
   Array.from(select.options).forEach(option => { if (!FOCUS_TRACK_IDS.has(option.value)) option.remove(); });
   select.value = FOCUS_TRACK_IDS.has(state.controls.track_id) ? state.controls.track_id : UI_DEFAULT_TRACK_ID;
 }
-function zoneColor(zone) { return zone.type === 'Overtake' ? '#f479a2' : '#d6b555'; }
+function zoneColor(zone) { return zone.type === 'Overtake' ? '#e4002b' : '#7b8082'; }
 function createZoneHighlights(scene, curve) {
   const group = new THREE.Group(); group.name = 'overtaking-zone-highlights';
   currentTrack.zones.forEach(zone => {

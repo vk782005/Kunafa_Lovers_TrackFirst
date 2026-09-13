@@ -6,12 +6,12 @@
   <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
   <title>Overtiq — Race decision workspace</title>
   <meta name="description" content="GPU-backed F1 race scenario and overtaking decision console for Haas car 31.">
-  <link rel="stylesheet" href="style.css?v=50">
+  <link rel="stylesheet" href="style.css?v=52">
 </head>
-<body data-view="simulator">
-  <script>document.body.dataset.view = new URLSearchParams(location.search).get('view') === 'delta' ? 'delta' : 'simulator';</script>
+<body data-view="delta">
+  <script>if (new URLSearchParams(location.search).get('view') === 'simulator') location.replace('./');</script>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Overtiq home"><i></i><span>OVERTIQ</span><small>RACE DECISION CONSOLE</small></a>
+    <a class="brand" href="./" aria-label="Overtiq home"><i></i><span>OVERTIQ</span><small>HAAS F1 TEAM</small></a>
     <div class="session-lockup"><span id="session-eyebrow">ROUND 08 / MONACO / 2025_9979</span><strong id="session-circuit">Monaco Circuit · Ocon 31</strong></div>
     <div class="connection-state"><span id="data-badge">GPU PENDING</span><b id="gpu-state">CONNECTING</b></div>
     <button id="fullscreen" class="icon-button" type="button" aria-label="Toggle full screen">⛶</button>
@@ -19,19 +19,18 @@
 
   <nav class="workspace-nav" aria-label="Race engineer workspace">
     <a href="./">HOME</a>
-    <a class="sim-link" href="workspace.html?view=simulator">LIVE SIMULATOR</a>
     <a class="delta-link" href="workspace.html?view=delta">SCENARIO DELTA</a>
   </nav>
 
   <main>
     <section class="track-section" aria-label="Track selection">
-      <div class="track-heading"><span class="eyebrow">ACTIVE RACE</span><label>ACTIVE TRACK<select id="track-select"><option value="MCO">MCO · MONACO</option><option value="ITA">ITA · MONZA</option></select></label></div>
+      <div class="track-heading"><span class="eyebrow">SCENARIO DELTA</span><label>TRACK<select id="track-select"><option value="MCO">MCO · MONACO</option><option value="ITA">ITA · MONZA</option></select></label></div>
       <div class="track-copy"><h1 id="track-meta">MONACO · Monaco · 3.337 km · 78 LAPS</h1><p id="track-profile">Measured Ocon race line through Monaco, where position, braking precision and traffic matter more than raw pace.</p></div>
       <div class="track-facts"><span id="track-zone-count">3 OVERTAKE WINDOWS · 5 DECISION ZONES</span><span id="data-note">Loading the precomputed race baseline</span></div>
     </section>
 
     <section class="sim-controls" aria-label="Live race simulator controls">
-      <div class="sim-heading"><div><span class="eyebrow">LIVE SIMULATOR · OCO 31</span><h2>Stress the Monaco decision model</h2></div><span id="sim-state" class="sim-state"><i></i> GPU LINK CONNECTING</span></div>
+      <div class="sim-heading"><div><span class="eyebrow">ADJUSTED CONDITIONS · OCO 31</span><h2>Scenario inputs</h2></div><span id="sim-state" class="sim-state"><i></i> GPU LINK CONNECTING</span></div>
       <div class="control-grid">
         <label>WEATHER<select id="weather"><option value="DRY">DRY</option><option value="INTERMEDIATE">INTERMEDIATE</option><option value="WET">WET</option></select></label>
         <label>TYRE<select id="tyre-compound"><option value="SOFT">SOFT</option><option value="MEDIUM" selected>MEDIUM</option><option value="HARD">HARD</option><option value="INTERMEDIATE">INTERMEDIATE</option><option value="WET">WET</option></select></label>
@@ -84,6 +83,6 @@
     <section class="runtime-strip" aria-label="Remote compute status"><span>SIM <b id="compute-sim">CONNECTING</b></span><span>PHYSICS <b id="compute-physics">CONNECTING</b></span><span>MODEL <b id="compute-model">WAITING</b></span><span>TELEMETRY <b id="compute-telemetry">NO FRAME</b></span><span>GPU TIME <b id="compute-latency">—</b></span><span>RUNS <b id="compute-requests">0</b></span><small id="footer-status">REMOTE GPU CALCULATIONS</small></section>
   </main>
   <script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
-  <script type="module" src="app.js?v=50"></script>
+  <script type="module" src="app.js?v=52"></script>
 </body>
 </html>

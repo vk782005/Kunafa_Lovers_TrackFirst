@@ -198,3 +198,39 @@ body[data-view="delta"] .comparison-panel{margin-top:18px}
 
 @media(max-width:780px){.home-page .brand small,.home-system{display:none}.home-nav{margin-left:auto}.home-nav a{padding:0 11px;font-size:8px}.home-hero{padding:40px 22px;min-height:calc(100vh - 120px)}.home-title{font-size:clamp(56px,16vw,90px)}.home-title strong,.home-hero>p,.home-actions{margin-left:0}.home-actions{align-items:stretch;flex-direction:column;max-width:330px}.home-actions a{width:100%}.car-number{right:-.04em;bottom:-.08em;font-size:70vw}.home-page .home-footer{flex-direction:row}}
 @media(max-width:480px){.home-nav a:first-child{display:none}.home-page .home-shell{padding:0 12px 16px}.home-hero{padding:34px 16px}.home-title{line-height:.82}.home-page .home-kicker{gap:6px;font-size:8px}.home-page .home-kicker span+span:before{margin-right:6px}.home-hero>p{font-size:12px}.car-number{bottom:.04em;opacity:.75}}
+
+/* Haas desktop race workspace */
+body[data-view="delta"]{
+  --bg:#f2f2f0;--panel:#ffffff;--panel-2:#ececea;--line:#d2d2cf;--line-soft:#e2e2df;
+  --text:#111315;--muted:#62676a;--quiet:#878b8d;--lime:#e4002b;--pink:#e4002b;
+  --amber:#9a5b15;--red:#e4002b;min-width:1280px;background:var(--bg);color:var(--text);color-scheme:light
+}
+body[data-view="delta"] .topbar{height:72px;padding:0 4.5vw;border-color:var(--line);background:#f2f2f0;position:relative}
+body[data-view="delta"] .brand{color:#111315}body[data-view="delta"] .brand i{border-color:#e4002b;border-right-color:transparent}body[data-view="delta"] .brand small{color:#737779}
+body[data-view="delta"] .session-lockup{display:flex}body[data-view="delta"] .session-lockup span{color:#7c8082}body[data-view="delta"] .session-lockup strong{color:#272a2c}
+body[data-view="delta"] .connection-state span{border-color:#e4002b;background:transparent;color:#e4002b}body[data-view="delta"] .connection-state span.connected{border-color:#e4002b;background:#e4002b;color:#fff}
+body[data-view="delta"] .connection-state b{color:#4f5456}body[data-view="delta"] .icon-button{display:block;color:#5d6264}
+body[data-view="delta"] .workspace-nav{height:44px;padding:0 4.5vw;position:relative;top:auto;border-color:var(--line);background:#fff}
+body[data-view="delta"] .workspace-nav a{padding:0 20px;border-color:var(--line);color:#62676a}body[data-view="delta"] .workspace-nav a:hover{background:#f1f1ef;color:#111315}
+body[data-view="delta"] .workspace-nav .delta-link{background:#e4002b;color:#fff}
+body[data-view="delta"] main{width:min(1480px,100%);padding:28px 4.5vw 44px}
+body[data-view="delta"] .track-section{grid-template-columns:220px 1fr;gap:34px;padding:10px 0 26px;border-color:var(--line);align-items:end}
+body[data-view="delta"] .track-heading{display:flex}body[data-view="delta"] .track-heading label{color:#737779}body[data-view="delta"] .track-heading select{background:#fff;border-color:#b8b8b5;color:#111315}
+body[data-view="delta"] .track-copy{padding-left:25px;border-color:#e4002b}body[data-view="delta"] .track-copy h1{font-size:31px}body[data-view="delta"] .track-copy p,body[data-view="delta"] .track-facts{display:none}
+body[data-view="delta"] .sim-controls{margin-top:18px;padding:20px 22px;border-color:var(--line);background:#fff}
+body[data-view="delta"] .sim-heading{margin-bottom:17px;flex-direction:row;align-items:center}body[data-view="delta"] .sim-heading h2{font-size:24px}body[data-view="delta"] .sim-state{color:#e4002b}
+body[data-view="delta"] .control-grid{grid-template-columns:1fr 1fr 1.1fr 1.1fr 1.1fr auto 1.35fr;gap:10px}
+body[data-view="delta"] select{background:#f7f7f5;border-color:#c7c8c5;color:#17191a}body[data-view="delta"] input[type=range]{background:#c8cac8}body[data-view="delta"] input[type=range]::-webkit-slider-thumb{background:#fff;border-color:#e4002b;box-shadow:0 0 0 1px #fff}
+body[data-view="delta"] .flag-button{background:#fff;border-color:#c7c8c5;color:#4f5456}body[data-view="delta"] .flag-button.on{background:#fff4f5;border-color:#e4002b;color:#e4002b}
+body[data-view="delta"] .primary-button{background:#e4002b;border-color:#e4002b;color:#fff}body[data-view="delta"] .primary-button:hover{background:#bd0024}
+body[data-view="delta"] .scenario-result{margin-top:14px;padding-top:11px;color:#737779}body[data-view="delta"] .scenario-result.running{color:#9a5b15}body[data-view="delta"] .scenario-result.success{color:#b00022}
+body[data-view="delta"] .comparison-panel{margin-top:18px;padding:0;border:0;background:transparent}
+body[data-view="delta"] .comparison-heading{min-height:74px;margin:0;padding:0 2px}body[data-view="delta"] .comparison-heading h2{font-size:34px}body[data-view="delta"] .comparison-heading>span{color:#8a2b3d}
+body[data-view="delta"] .comparison-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+body[data-view="delta"] .comparison-card,body[data-view="delta"] .comparison-card.adjusted{padding:16px;background:#fff;border-color:#d2d2cf}body[data-view="delta"] .comparison-card.adjusted{border-top:3px solid #e4002b}
+body[data-view="delta"] .comparison-label>span{background:#111315;color:#fff}body[data-view="delta"] .comparison-label small{display:block;color:#74797b}
+body[data-view="delta"] .comparison-visual{height:470px;border-color:#c8c9c7;background:#111719}
+body[data-view="delta"] .comparison-metrics{grid-template-columns:repeat(3,1fr) auto}body[data-view="delta"] .comparison-metrics b{color:#e4002b}body[data-view="delta"] .comparison-metrics>strong{grid-column:auto;margin-top:0;border-color:#e4002b;color:#e4002b}
+body[data-view="delta"] .playback{margin-top:14px;padding:18px 20px;background:#fff;border-color:var(--line)}
+body[data-view="delta"] .transport{flex-wrap:nowrap}body[data-view="delta"] .transport label{margin-left:auto}body[data-view="delta"] .transport button{background:#fff;border-color:#c7c8c5;color:#383c3e}body[data-view="delta"] .transport .play-button{background:#e4002b;border-color:#e4002b;color:#fff}body[data-view="delta"] #live-stream{border-color:#e4002b;color:#e4002b;background:#fff}
+body[data-view="delta"] .runtime-strip{display:none}
