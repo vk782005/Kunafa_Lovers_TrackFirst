@@ -5,39 +5,29 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
   <title>Overtiq — Race engineer</title>
-  <meta name="description" content="Focused GPU race simulation and scenario comparison for Haas car 31.">
-  <link rel="stylesheet" href="style.css?v=50">
+  <meta name="description" content="Haas race command for car 31.">
+  <link rel="stylesheet" href="style.css?v=51">
 </head>
 <body class="home-page">
   <header class="topbar home-topbar">
-    <a class="brand" href="./" aria-label="Overtiq home"><i></i><span>OVERTIQ</span><small>RACE DECISION CONSOLE</small></a>
+    <a class="brand" href="./" aria-label="Overtiq home"><i></i><span>OVERTIQ</span><small>HAAS F1 TEAM</small></a>
+    <nav class="home-nav" aria-label="Race engineer tools"><a href="workspace.html?view=simulator">SIMULATOR</a><a href="workspace.html?view=delta">SCENARIO DELTA</a></nav>
     <div class="home-system"><i></i><span id="home-gpu">CHECKING GPU</span></div>
   </header>
 
   <main class="home-shell">
-    <section class="home-intro">
-      <div class="home-kicker"><span>ROUND 08</span><span>MONACO</span><span>CAR 31 · OCON</span></div>
-      <h1>Two views.<br><em>One race decision.</em></h1>
-      <p>Choose the task in front of you. The live simulator tests a race condition. Scenario Delta shows exactly what changed.</p>
+    <section class="home-hero">
+      <div class="home-kicker"><span>ROUND 08</span><span>MONACO</span><span>CAR 31</span></div>
+      <div class="home-title"><span>RACE</span><strong>COMMAND</strong></div>
+      <p>Esteban Ocon · Monaco Grand Prix</p>
+      <div class="home-actions">
+        <a class="home-primary" href="workspace.html?view=simulator">OPEN SIMULATOR <span>↗</span></a>
+        <a href="workspace.html?view=delta">VIEW SCENARIO DELTA <span>↗</span></a>
+      </div>
+      <div class="car-number" aria-hidden="true">31</div>
     </section>
 
-    <section class="home-routes" aria-label="Race engineer tools">
-      <a class="route-card route-sim" href="workspace.html?view=simulator">
-        <span class="route-number">01</span>
-        <div class="route-copy"><small>LIVE SIMULATOR</small><h2>Stress the Monaco<br>decision model</h2><p>Set weather, tyre, ERS, fuel and race-control state. Run one adjusted scenario on the RTX 3060.</p></div>
-        <span class="route-arrow">↗</span>
-        <div class="route-meta"><span>TRACK + DRIVER POV</span><span>ENGINEER OUTPUTS</span><span>OVERTAKE ZONES</span></div>
-      </a>
-
-      <a class="route-card route-delta" href="workspace.html?view=delta">
-        <span class="route-number">02</span>
-        <div class="route-copy"><small>SCENARIO DELTA</small><h2>Full race<br>before / after</h2><p>Compare the precomputed baseline with the adjusted GPU run at the same race time.</p></div>
-        <span class="route-arrow">↗</span>
-        <div class="route-meta"><span>SYNCHRONIZED RENDERS</span><span>OUTCOME DELTA</span><span>RACE TIMELINE</span></div>
-      </a>
-    </section>
-
-    <footer class="home-footer"><span>ACTIVE DATASET · MONACO / MONZA</span><span>PHYSICSFRAME.V1 · V4 LOGISTIC</span></footer>
+    <footer class="home-footer"><span>OVERTIQ / HAAS F1 TEAM</span><span>LIVE RACE ENGINEERING</span></footer>
   </main>
 
   <script>
