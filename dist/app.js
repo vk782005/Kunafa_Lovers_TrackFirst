@@ -172,7 +172,12 @@ async function connectGpu(force = false) {
       $('data-note').textContent = 'Precomputed race baseline loaded · GPU ready for an adjusted scenario';
       $('compute-requests').textContent = '0 LIVE RUNS'; $('sim-state').innerHTML = '<i class="live-dot"></i> BASELINE READY · GPU IDLE';
       $('live-stream').textContent = 'BASELINE LOADED'; $('live-stream').disabled = true;
-      renderAssessment(); renderComparison(); renderZones(); renderFrame();
+      // Rendering is presentation work. Once bootstrap returned 200, a
+      // renderer failure must never be reclassified as a GPU connection
+      // failure or schedule another POST.
+      for (const render of [renderAssessment, renderComparison, renderZones, renderFrame]) {
+        try { render(); } catch (error) { console.error('Renderer failed after baseline load', error); }
+      }
     } catch (error) {
       const retained = Boolean(state.assessment && state.frames.length);
       state.connected = false;
@@ -270,7 +275,7 @@ function renderTrackInfo() {
   if (profile) profile.textContent = currentTrack.profile;
   const info = $('track-zone-count');
   if (info) info.textContent = currentTrack.zones.filter(z => z.type === 'Overtake').length + ' OVERTAKE WINDOWS · ' + currentTrack.zones.length + ' DECISION ZONES';
-  const laps = lap-count;
+  const laps = $('lap-count');
   if (laps) laps.textContent = '/ ' + currentTrack.laps + ' LAPS';
 }
 function zoneColor(zone) { return zone.type === 'Overtake' ? '#f479a2' : '#d6b555'; }
