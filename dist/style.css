@@ -306,8 +306,8 @@ body[data-view="delta"] .overtake-cue[data-support="conditional"]{border-left-co
 @keyframes overtake-cue-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 
 /* Keep replay telemetry clear of the racing line. */
-body[data-view="delta"] .comparison-visual{--info-rail:250px;background:#080b0d}
-body[data-view="delta"] .comparison-visual::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:0;width:var(--info-rail);background:#0b1012;border-left:1px solid #354044;pointer-events:none}
+body[data-view="delta"] .comparison-visual{--info-rail:208px;background:#080b0d}
+body[data-view="delta"] .comparison-visual::after{content:"";position:absolute;z-index:1;top:0;right:0;bottom:0;width:var(--info-rail);background:transparent;border:0;pointer-events:none}
 body[data-view="delta"] .comparison-visual canvas{position:relative;z-index:0;width:calc(100% - var(--info-rail))}
 body[data-view="delta"] .visual-split-labels{z-index:2;right:var(--info-rail)}
 body[data-view="delta"] .comparison-telemetry{left:auto;right:12px;top:350px;bottom:auto;width:226px;grid-template-columns:1fr 1fr;background:#080b0dea;box-shadow:none;z-index:4}
@@ -328,15 +328,15 @@ body[data-view="delta"] .window-item.selected{border-left:2px solid #e4002b;back
 body[data-view="delta"] .window-item.selected>span,body[data-view="delta"] .window-item.active>small{color:#e4002b}
 body[data-view="delta"] .window-item.complete>small{color:#5bce7e}
 body[data-view="delta"] .window-item.passed{opacity:.5}
-body[data-view="delta"] .overtake-cue{top:145px;right:12px;width:226px;box-shadow:none}
+body[data-view="delta"] .overtake-cue{top:145px;right:10px;width:calc(var(--info-rail) - 20px);box-shadow:none}
 
 /* Compact engineer rail: keep the information grouped and out of the
    canvas while using the reserved column instead of floating over the lap. */
 body[data-view="delta"] .comparison-visual::after{background:linear-gradient(180deg,#0e1518 0%,#0a1012 55%,#0c1315 100%)}
-body[data-view="delta"] .window-list{right:12px;top:18px;width:226px;background:#0b1113;border-color:#465257}
-body[data-view="delta"] .window-list::before{content:"ACTIVE OVERTAKE WINDOW";color:#aeb8b6;border-color:#465257}
+body[data-view="delta"] .window-list{right:10px;top:18px;width:calc(var(--info-rail) - 20px);background:#0b1113;border-color:#354146}
+body[data-view="delta"] .window-list::before{content:"ACTIVE OVERTAKE WINDOW";color:#aeb8b6;border-color:#354146}
 body[data-view="delta"] .window-item{min-height:48px;background:#10171a;border-color:#2d383c}
 body[data-view="delta"] .window-item.selected{background:linear-gradient(90deg,#270812,#11171a);border-left-color:#e4002b}
-body[data-view="delta"] .comparison-telemetry{top:284px;right:12px;width:226px;background:transparent;border:0;box-shadow:none;gap:4px}
+body[data-view="delta"] .comparison-telemetry{top:284px;right:10px;width:calc(var(--info-rail) - 20px);background:transparent;border:0;box-shadow:none;gap:4px}
 body[data-view="delta"] .comparison-telemetry>span{padding:8px 9px;background:#10171a;border:1px solid #39464a}
-body[data-view="delta"] .comparison-time{top:394px;right:12px;width:226px;background:#10171a;border-color:#39464a}
+body[data-view="delta"] .comparison-time{top:394px;right:10px;width:calc(var(--info-rail) - 20px);background:#10171a;border-color:#39464a}
