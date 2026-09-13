@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id);
 const API_DEFAULT = new URLSearchParams(location.search).get('api') || location.origin;
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const SNAPSHOT_KEY = 'overtiq-gpu-snapshot-v1';
-const TRACK_PREF_KEY = 'overtiq-track-id-v1';
+const TRACK_PREF_KEY = 'overtiq-track-id-v2';
 const FOCUS_TRACK_IDS = new Set(['MCO', 'ITA']);
 const UI_DEFAULT_TRACK_ID = 'MCO';
 const savedTrack = sessionStorage.getItem(TRACK_PREF_KEY) || 'MCO';
