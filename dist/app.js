@@ -483,13 +483,54 @@ function makeF1Car(primary = '#f1f1ef', secondary = '#15191b', scale = 1, accent
   return car;
 }
 
-function placeCarOnTrack(car, progress, y = 3, frame = null) {
+function placeCarOnTrack(car, progress, y = 3, frame = null, lateral = 0) {
   const u = (progress % 1 + 1) % 1, point = trackCurve.getPointAt(u), tangent = trackCurve.getTangentAt(u);
-  car.position.copy(point); car.position.y = y;
+  car.position.copy(point);
+  car.position.x += -tangent.z * lateral;
+  car.position.z += tangent.x * lateral;
+  car.position.y = y;
   car.rotation.order = 'YXZ';
   car.rotation.y = Math.atan2(-tangent.x, -tangent.z);
   car.rotation.x = Math.max(-.055, Math.min(.055, -(frame?.kinematics?.accel_mps2 || 0) * .006));
   car.rotation.z = Math.max(-.07, Math.min(.07, (frame?.pose?.roll_rad || 0) * .85));
+}
+
+function smoothstep(min, max, value) {
+  const x = Math.max(0, Math.min(1, (value - min) / Math.max(.0001, max - min)));
+  return x * x * (3 - 2 * x);
+}
+
+function overtakeMotion(frame) {
+  if (!frame) return null;
+  const flags = frame.flags || {}, race = frame.race || {};
+  const action = race.decision || state.decision || 'HOLD';
+  const gapS = Number(race.gap_ahead_s ?? 99);
+  if (action !== 'ATTACK' || flags.red_flag || flags.vsc || flags.safety_car || gapS > 1.2) return null;
+  const zones = currentTrack.zones.filter(zone => zone.type === 'Overtake').sort((a, b) => a.position - b.position);
+  if (!zones.length) return null;
+  const trackLength = frame.track?.length_m || currentTrack.lengthM;
+  const rawProgress = Math.max(0, Number(frame.track?.s_m || 0) / trackLength);
+  const firstZone = zones[0];
+  const start = Math.max(0, firstZone.position - .05);
+  const completeAt = firstZone.position + .018;
+  const phase = Math.max(0, Math.min(1, (rawProgress - start) / Math.max(.012, completeAt - start)));
+  const passBlend = smoothstep(.28, .84, phase);
+  const speed = Math.max(1, Number(frame.kinematics?.speed_mps || 70));
+  const baseGapProgress = Math.max(.0015, Math.min(.025, Math.abs(gapS) * speed / trackLength));
+  // A full-circuit camera compresses real-world gaps to only a few pixels.
+  // Keep a one-marker visual margin after the pass so the new order is clear.
+  const marginProgress = Math.max(.012, 55 / trackLength);
+  const displayGapProgress = baseGapProgress + (-marginProgress - baseGapProgress) * passBlend;
+  const lanePhase = Math.sin(Math.PI * Math.min(1, phase / .92));
+  return {
+    zone: firstZone,
+    phase,
+    completed: rawProgress >= completeAt,
+    displayGapProgress,
+    displayGapS: displayGapProgress * trackLength / speed,
+    carLateral: lanePhase * (firstZone.side === 'Outside' ? -6.5 : 6.5),
+    opponentLateral: lanePhase * (firstZone.side === 'Outside' ? 1.1 : -1.1)
+  };
 }
 
 function sceneBackgroundForFlags(scene, flags = {}, weather = 'DRY') {
@@ -556,7 +597,9 @@ function renderThree(frame) {
   if (!trackRenderer || !frame) return;
   const s = (frame.track?.s_m || 0) / (frame.track?.length_m || 5278), gap = frame.race?.gap_ahead_s || .5;
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame.kinematics?.speed_mps || 70) / currentTrack.lengthM));
-  placeCarOnTrack(carMesh, s, 4, frame); placeCarOnTrack(oppMesh, s + gapProgress, 4, frame);
+  const motion = overtakeMotion(frame), displayGap = motion?.displayGapProgress ?? gapProgress;
+  placeCarOnTrack(carMesh, s, 4, frame, motion?.carLateral || 0);
+  placeCarOnTrack(oppMesh, s + displayGap, 4, frame, motion?.opponentLateral || 0);
   animateTrackMarker(carMesh, frame, 0); animateTrackMarker(oppMesh, frame, 1.7);
   setActiveZone(trackZoneGroup, frame.track?.zone);
   trackRenderer.render(trackScene, trackCamera);
@@ -574,14 +617,15 @@ function renderComparisonViews() {
 }
 function setComparisonTelemetry(prefix, frame) {
   const k = frame?.kinematics || {}, race = frame?.race || {}, flags = frame?.flags || {};
+  const motion = overtakeMotion(frame);
   const stateLabel = flags.red_flag ? 'RED' : (flags.vsc || flags.safety_car ? 'VSC' : (frame ? 'GREEN' : 'WAIT'));
   $(prefix + '-race-speed').textContent = frame ? Math.round(k.speed_kph ?? ((k.speed_mps || 0) * 3.6)) + ' KPH' : '—';
   $(prefix + '-race-gear').textContent = frame ? String(frame.controls?.gear ?? 7) : '—';
-  $(prefix + '-race-gap').textContent = frame && race.gap_ahead_s != null ? Number(race.gap_ahead_s).toFixed(2) + ' S' : '—';
+  $(prefix + '-race-gap').textContent = !frame || race.gap_ahead_s == null ? '—' : motion?.displayGapS < 0 ? 'AHEAD ' + Math.abs(motion.displayGapS).toFixed(2) + ' S' : Number(motion?.displayGapS ?? race.gap_ahead_s).toFixed(2) + ' S';
   $(prefix + '-race-state').textContent = stateLabel;
   $(prefix + '-race-state').classList.toggle('alert', stateLabel === 'RED' || stateLabel === 'VSC');
 }
-function renderOvertakeCue(side, frame) {
+function renderOvertakeCue(side, frame, motion = overtakeMotion(frame)) {
   const cue = $(side + '-overtake-cue');
   if (!cue) return;
   const assessment = side === 'before' ? state.beforeAssessment : state.assessment;
@@ -594,7 +638,7 @@ function renderOvertakeCue(side, frame) {
   const target = candidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))[0];
   const gap = Number(race.gap_ahead_s ?? 99);
   const action = race.decision || assessment?.decision || 'HOLD';
-  const active = Boolean(frame && target && action === 'ATTACK' && !flags.red_flag && !flags.vsc && !flags.safety_car && gap <= 1.2 && target.delta >= -.022 && target.delta <= .048);
+  const active = Boolean(frame && motion && target && target.zone.id === motion.zone.id && action === 'ATTACK' && !flags.red_flag && !flags.vsc && !flags.safety_car && gap <= 1.2 && target.delta >= -.04 && target.delta <= .048);
   cue.hidden = !active;
   if (!active) return;
   const answers = assessment?.answers || {}, pass = Number(answers.can_pass_within_60s?.probability || 0), durable = Number(answers.durable_pass?.probability || 0);
@@ -607,14 +651,15 @@ function renderOvertakeCue(side, frame) {
   const tyre = String(controls?.tire_compound || frame.tires?.compound || 'MEDIUM').toUpperCase();
   const rain = Math.round(Number(controls?.rain_intensity ?? race.rain_intensity ?? 0) * 100);
   const support = recommendation === 'ATTACK' ? 'MODEL APPROVED' : pass >= .22 ? 'CONDITIONAL' : 'ENGINEER OVERRIDE';
-  const phase = gap <= 0 ? 'PASS COMPLETE' : eta > .7 ? 'OVERTAKE WINDOW OPENING' : 'OVERTAKE COMMITTED';
+  const phase = motion?.completed || motion?.displayGapS < 0 ? 'PASS COMPLETE' : eta > .7 ? 'OVERTAKE WINDOW OPENING' : 'OVERTAKE COMMITTED';
   const condition = rain > 15 ? weather + ' · ' + rain + '% RAIN · ' + tyre : weather + ' · ' + tyre;
   const instruction = pass < .22
     ? 'Attack command is live with low model support. Keep ' + reserve + '% ERS for the counterattack.'
     : 'Deploy on exit and keep ' + reserve + '% ERS in reserve to protect the position.';
   $(side + '-overtake-kicker').textContent = 'ENGINE · ' + support + (eta > .15 ? ' · ' + eta.toFixed(1) + 'S TO COMMIT' : ' · COMMIT NOW');
   $(side + '-overtake-title').textContent = phase + ' · ' + target.zone.id;
-  $(side + '-overtake-copy').textContent = 'OCO is ' + Math.abs(gap).toFixed(2) + 's ' + (gap <= 0 ? 'ahead of' : 'behind') + ' GAS at ' + target.zone.approach + '. ' + instruction;
+  const displayGap = Number(motion?.displayGapS ?? gap);
+  $(side + '-overtake-copy').textContent = 'OCO is ' + Math.abs(displayGap).toFixed(2) + 's ' + (displayGap < 0 ? 'ahead of' : 'behind') + ' GAS at ' + target.zone.approach + '. ' + (displayGap < 0 ? 'Pass completed. Rejoin the racing line and protect the exit.' : instruction);
   $(side + '-overtake-meta').textContent = condition + '   PASS ' + Math.round(pass * 100) + '%   DURABLE ' + Math.round(durable * 100) + '%   ERS ' + ers + '%';
   cue.dataset.support = support === 'MODEL APPROVED' ? 'approved' : support === 'CONDITIONAL' ? 'conditional' : 'override';
 }
@@ -626,14 +671,16 @@ function renderComparisonView(view, frame, side) {
   const height = Math.max(1, Math.floor(canvas.clientHeight || 240));
   const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
   const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame?.kinematics?.speed_mps || 70) / currentTrack.lengthM));
-  placeCarOnTrack(view.trackCar, s, 4, frame); placeCarOnTrack(view.trackOpp, s + gapProgress, 4, frame);
+  const motion = overtakeMotion(frame), displayGap = motion?.displayGapProgress ?? gapProgress;
+  placeCarOnTrack(view.trackCar, s, 4, frame, motion?.carLateral || 0);
+  placeCarOnTrack(view.trackOpp, s + displayGap, 4, frame, motion?.opponentLateral || 0);
   animateTrackMarker(view.trackCar, frame, 0); animateTrackMarker(view.trackOpp, frame, 1.7);
   setActiveZone(view.zoneGroup, frame?.track?.zone);
   renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
   renderer.setViewport(0, 0, width, height); renderer.setScissor(0, 0, width, height);
   renderer.render(view.trackScene, view.trackCamera);
   renderer.setScissorTest(false);
-  renderOvertakeCue(side, frame);
+  renderOvertakeCue(side, frame, motion);
 }
 function syncComparisonLayout() {
   document.body.classList.toggle('details-collapsed', state.detailsCollapsed);
