@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
+  <title>Overtiq — Race decision workspace</title>
+  <meta name="description" content="GPU-backed F1 race scenario and overtaking decision console for Haas car 31.">
+  <link rel="stylesheet" href="style.css?v=50">
+</head>
+<body data-view="simulator">
+  <script>document.body.dataset.view = new URLSearchParams(location.search).get('view') === 'delta' ? 'delta' : 'simulator';</script>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Overtiq home"><i></i><span>OVERTIQ</span><small>RACE DECISION CONSOLE</small></a>
+    <div class="session-lockup"><span id="session-eyebrow">ROUND 08 / MONACO / 2025_9979</span><strong id="session-circuit">Monaco Circuit · Ocon 31</strong></div>
+    <div class="connection-state"><span id="data-badge">GPU PENDING</span><b id="gpu-state">CONNECTING</b></div>
+    <button id="fullscreen" class="icon-button" type="button" aria-label="Toggle full screen">⛶</button>
+  </header>
+
+  <nav class="workspace-nav" aria-label="Race engineer workspace">
+    <a href="./">HOME</a>
+    <a class="sim-link" href="workspace.html?view=simulator">LIVE SIMULATOR</a>
+    <a class="delta-link" href="workspace.html?view=delta">SCENARIO DELTA</a>
+  </nav>
+
+  <main>
+    <section class="track-section" aria-label="Track selection">
+      <div class="track-heading"><span class="eyebrow">ACTIVE RACE</span><label>ACTIVE TRACK<select id="track-select"><option value="MCO">MCO · MONACO</option><option value="ITA">ITA · MONZA</option></select></label></div>
+      <div class="track-copy"><h1 id="track-meta">MONACO · Monaco · 3.337 km · 78 LAPS</h1><p id="track-profile">Measured Ocon race line through Monaco, where position, braking precision and traffic matter more than raw pace.</p></div>
+      <div class="track-facts"><span id="track-zone-count">3 OVERTAKE WINDOWS · 5 DECISION ZONES</span><span id="data-note">Loading the precomputed race baseline</span></div>
+    </section>
+
+    <section class="sim-controls" aria-label="Live race simulator controls">
+      <div class="sim-heading"><div><span class="eyebrow">LIVE SIMULATOR · OCO 31</span><h2>Stress the Monaco decision model</h2></div><span id="sim-state" class="sim-state"><i></i> GPU LINK CONNECTING</span></div>
+      <div class="control-grid">
+        <label>WEATHER<select id="weather"><option value="DRY">DRY</option><option value="INTERMEDIATE">INTERMEDIATE</option><option value="WET">WET</option></select></label>
+        <label>TYRE<select id="tyre-compound"><option value="SOFT">SOFT</option><option value="MEDIUM" selected>MEDIUM</option><option value="HARD">HARD</option><option value="INTERMEDIATE">INTERMEDIATE</option><option value="WET">WET</option></select></label>
+        <label>RAIN <span id="rain-value">0%</span><input id="rain-intensity" type="range" min="0" max="100" step="5" value="0"></label>
+        <label>ERS <span id="ers-value">62%</span><input id="ers-fraction" type="range" min="0" max="100" step="1" value="62"></label>
+        <label>FUEL <span id="fuel-value">42 kg</span><input id="fuel-kg" type="range" min="5" max="100" step="1" value="42"></label>
+        <div class="flag-controls"><button id="vsc-toggle" class="flag-button" type="button">VSC <span>OFF</span></button><button id="red-flag-toggle" class="flag-button danger" type="button">RED FLAG <span>OFF</span></button></div>
+        <button id="apply-scenario" class="primary-button" type="button">RUN ADJUSTED SCENARIO <span>→</span></button>
+      </div>
+      <div id="scenario-result" class="scenario-result">Change race conditions, then run one adjusted GPU scenario.</div>
+    </section>
+
+    <section class="live-grid">
+      <article class="visual-card track-panel">
+        <div class="panel-top"><div><span class="eyebrow">CAR 31 · LIVE FRAME</span><h2 id="view-label">CIRCUIT VIEW</h2></div><div class="view-controls" role="group" aria-label="Replay view"><button id="circuit-view" class="view-button active" type="button">TRACK</button><button id="pov-view-button" class="view-button" type="button">DRIVER POV</button></div><span id="race-state" class="race-state">GREEN FLAG</span></div>
+        <div id="visual-wrap" class="visual-wrap">
+          <canvas id="track-canvas" aria-label="Rendered F1 car on the active circuit"></canvas><canvas id="pov-canvas" aria-label="Rendered Haas F1 driver point of view"></canvas>
+          <div id="frame-status" class="frame-status"><i></i> WAITING FOR GPU FRAMES</div><div id="map-zone-list" class="map-zone-list" aria-label="Overtaking zone highlights"></div>
+          <div class="lap-overlay"><small>RACE LAP</small><strong id="lap">—</strong><span id="lap-count">/ 78</span></div>
+          <div class="telemetry-strip"><span><small>DRIVER</small><b id="hud-driver">OCO · 31</b></span><span><small>SPEED</small><b id="hud-speed">—</b></span><span><small>GEAR</small><b id="hud-gear">—</b></span><span><small>LAP</small><b id="hud-lap">—</b></span></div>
+        </div>
+        <div class="visual-footer"><span id="map-status">NO PHYSICS FRAME</span><span>THREE.JS · PHYSICSFRAME.V1</span></div>
+      </article>
+
+      <aside class="metrics-rail" aria-label="Engineer metrics">
+        <div class="metrics-heading"><span class="eyebrow">ENGINEER OUTPUT</span><span id="assessment-time">REMOTE COMPUTE</span></div>
+        <article class="metric-card primary"><div><span>GAIN POSITION</span><small>WITHIN 3 LAPS</small></div><b id="answer-gain">—</b><div class="bar"><i id="bar-gain"></i></div><p id="evidence-gain">Awaiting scenario evidence</p></article>
+        <article class="metric-card"><div><span>PASS WINDOW</span><small>WITHIN 60 SEC</small></div><b id="answer-pass">—</b><div class="bar"><i id="bar-pass"></i></div><p id="evidence-pass">Awaiting scenario evidence</p></article>
+        <article class="metric-card"><div><span>DURABLE PASS</span><small>AHEAD +3 LAPS</small></div><b id="answer-durable">—</b><div class="bar"><i id="bar-durable"></i></div><p id="evidence-durable">Awaiting scenario evidence</p></article>
+        <article class="finish-card"><span>PROJECTED FINISH</span><strong id="finish-expected">—</strong><div id="finish-bars" class="finish-bars"></div><p id="finish-note">Waiting for the model.</p></article>
+        <div class="driver-card"><div><span>31</span><strong>ESTEBAN OCON</strong><small>HAAS F1 TEAM</small></div><b id="position">P14</b><span id="speed">—</span><i id="tyre-badge">M</i><small id="tyre-age">18 laps</small><span id="driver-number" hidden>31</span><span id="driver-name" hidden>Esteban Ocon</span></div>
+      </aside>
+    </section>
+
+    <section class="comparison-panel" aria-label="Before and after scenario comparison">
+      <div class="comparison-heading"><div><span class="eyebrow">SCENARIO DELTA</span><h2>Full race before / after</h2></div><span id="scenario-delta">WAITING FOR GPU BASELINE</span></div>
+      <div class="comparison-grid">
+        <article class="comparison-card baseline"><div class="comparison-label"><span>01</span><strong>BASELINE</strong><small id="before-condition">DRY · MEDIUM · GREEN</small></div><div class="comparison-visual"><canvas id="before-race-canvas" aria-label="Baseline track and driver POV"></canvas><div class="visual-split-labels"><span>TRACK</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="before-race-speed">—</b></span><span><small>GEAR</small><b id="before-race-gear">—</b></span><span><small>GAP</small><b id="before-race-gap">—</b></span><span><small>STATE</small><b id="before-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="before-race-time">00:00</b><span id="before-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="before-pass">—</b></span><span><small>DURABLE +3L</small><b id="before-durable">—</b></span><span><small>FINISH</small><b id="before-finish">—</b></span><strong id="before-action">HOLD</strong></div></article>
+        <article class="comparison-card adjusted"><div class="comparison-label"><span>02</span><strong>GPU ADJUSTED</strong><small id="after-condition">LIVE CONTROL STATE</small></div><div class="comparison-visual"><canvas id="after-race-canvas" aria-label="Adjusted track and driver POV"></canvas><div class="visual-split-labels"><span>TRACK</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="after-race-speed">—</b></span><span><small>GEAR</small><b id="after-race-gear">—</b></span><span><small>GAP</small><b id="after-race-gap">—</b></span><span><small>STATE</small><b id="after-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="after-race-time">00:00</b><span id="after-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="after-pass">—</b></span><span><small>DURABLE +3L</small><b id="after-durable">—</b></span><span><small>FINISH</small><b id="after-finish">—</b></span><strong id="after-action">HOLD</strong></div></article>
+      </div>
+    </section>
+
+    <section class="strategy-section">
+      <div class="strategy-heading"><div><span class="eyebrow">OVERTAKE MAP</span><h2>Zone decisions</h2></div><div class="decision-controls" role="group" aria-label="Engineer action override"><button data-decision="ATTACK" class="decision-button active">ATTACK</button><button data-decision="DEFEND" class="decision-button">DEFEND</button><button data-decision="CONSERVE" class="decision-button">CONSERVE</button><button data-decision="RECOVER" class="decision-button">RECOVER</button></div></div>
+      <div class="table-scroll"><table><thead><tr><th>ZONE</th><th>SECTOR</th><th>TYPE</th><th>PASS ≤60S</th><th>DURABLE</th><th>ENGINEER READ</th></tr></thead><tbody id="zone-rows"><tr><td colspan="6">Loading GPU zone assessment.</td></tr></tbody></table></div>
+    </section>
+
+    <section class="playback"><div class="timeline-heading"><span class="eyebrow">RACE TIMELINE</span><span id="time-label">00:00 <span>/ 01:00</span></span></div><input id="timeline" type="range" min="0" max="60" step="0.25" value="0" aria-label="Race position in seconds"><div class="timeline-ticks"><span>L35</span><span>ZONE T1</span><span>ZONE T10</span><span>L38</span></div><div class="transport"><div><button id="reset" aria-label="Restart race stream">↶</button><button id="back" aria-label="Back five seconds">−5</button><button id="play" class="play-button" aria-label="Play race stream">▶</button><button id="forward" aria-label="Forward five seconds">+5</button></div><label>PLAYBACK<select id="rate"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button id="live-stream" type="button" disabled>BASELINE LOADING</button></div></section>
+
+    <section class="runtime-strip" aria-label="Remote compute status"><span>SIM <b id="compute-sim">CONNECTING</b></span><span>PHYSICS <b id="compute-physics">CONNECTING</b></span><span>MODEL <b id="compute-model">WAITING</b></span><span>TELEMETRY <b id="compute-telemetry">NO FRAME</b></span><span>GPU TIME <b id="compute-latency">—</b></span><span>RUNS <b id="compute-requests">0</b></span><small id="footer-status">REMOTE GPU CALCULATIONS</small></section>
+  </main>
+  <script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
+  <script type="module" src="app.js?v=50"></script>
+</body>
+</html>
