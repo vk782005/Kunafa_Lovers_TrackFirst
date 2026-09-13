@@ -1,5 +1,5 @@
 import * as THREE from './three.module.js';
-import { formatTrackLength, getTrack } from './track-data.js?v=25';
+import { formatTrackLength, getTrack, trackOptions } from './track-data.js?v=70';
 
 const $ = (id) => document.getElementById(id);
 // The race terminal and GPU API are served by the same FastAPI origin. A
@@ -8,8 +8,8 @@ const $ = (id) => document.getElementById(id);
 const API_DEFAULT = new URLSearchParams(location.search).get('api') || location.origin;
 const API_KEY_DEFAULT = '5839920c81e1214f49627dd91a26b9861160d68925291dc0eb42cad4667bc206';
 const SNAPSHOT_KEY = 'overtiq-gpu-snapshot-v1';
-const TRACK_PREF_KEY = 'overtiq-track-id-v2';
-const FOCUS_TRACK_IDS = new Set(['MCO', 'ITA']);
+const TRACK_PREF_KEY = 'overtiq-track-id-v3';
+const FOCUS_TRACK_IDS = new Set(['MCO', 'ITA', 'AUS', 'JPN', 'BHR', 'BEL']);
 const UI_DEFAULT_TRACK_ID = 'MCO';
 const savedTrack = sessionStorage.getItem(TRACK_PREF_KEY) || 'MCO';
 const SAVED_TRACK_ID = FOCUS_TRACK_IDS.has(savedTrack) ? savedTrack : UI_DEFAULT_TRACK_ID;
@@ -49,7 +49,7 @@ const state = {
 
 let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig, povMotion;
 let currentTrack = getTrack(state.controls.track_id), trackCurve;
-let trackRoad, trackLine, trackZoneGroup;
+let trackRoad, trackLine, trackRacingLine, trackZoneGroup;
 const comparisonViews = { before: null, after: null };
 function makeTrackCurve(track) {
   return new THREE.CatmullRomCurve3(track.geometry.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
@@ -339,7 +339,7 @@ function renderTrackInfo() {
 function limitTrackSelector() {
   const select = $('track-select');
   if (!select) return;
-  Array.from(select.options).forEach(option => { if (!FOCUS_TRACK_IDS.has(option.value)) option.remove(); });
+  select.innerHTML = trackOptions().filter(track => FOCUS_TRACK_IDS.has(track.id)).map(track => '<option value="' + track.id + '">' + track.id + ' · ' + track.name.toUpperCase() + '</option>').join('');
   select.value = FOCUS_TRACK_IDS.has(state.controls.track_id) ? state.controls.track_id : UI_DEFAULT_TRACK_ID;
 }
 function zoneColor(zone) { return zone.type === 'Overtake' ? '#e4002b' : '#7b8082'; }
@@ -365,7 +365,7 @@ function setActiveZone(group, activeId) {
     const active = Boolean(activeId && child.userData.zoneId === activeId);
     const material = child.material;
     material.opacity = active ? 1 : child.userData.baseOpacity;
-    material.color.set(active ? '#b7f578' : zoneColor({ type: child.userData.zoneType }));
+    material.color.set(active ? '#ffffff' : zoneColor({ type: child.userData.zoneType }));
   });
   document.querySelectorAll('.map-zone-chip').forEach(chip => chip.classList.toggle('active', chip.dataset.zone === activeId));
   document.querySelectorAll('tr[data-zone]').forEach(row => row.classList.toggle('active', row.dataset.zone === activeId));
@@ -373,12 +373,14 @@ function setActiveZone(group, activeId) {
 function updateTrackGeometry() {
   trackRoad?.geometry.dispose(); trackRoad && (trackRoad.geometry = makeTrackRibbon(trackCurve, 34, 256, 0, 1, .1));
   trackLine?.geometry.dispose(); trackLine && (trackLine.geometry = makeTrackRibbon(trackCurve, 42, 256, 0, 1, 0));
+  trackRacingLine?.geometry.dispose(); trackRacingLine && (trackRacingLine.geometry = makeTrackRibbon(trackCurve, 1.1, 320, 0, 1, .24));
   if (trackZoneGroup) { trackScene.remove(trackZoneGroup); trackZoneGroup.traverse(child => child.geometry?.dispose()); }
   trackZoneGroup = createZoneHighlights(trackScene, trackCurve);
   Object.values(comparisonViews).forEach(view => {
     if (!view) return;
     view.road.geometry.dispose(); view.road.geometry = makeTrackRibbon(trackCurve, 32, 224, 0, 1, .1);
     view.edge.geometry.dispose(); view.edge.geometry = makeTrackRibbon(trackCurve, 40, 224, 0, 1, 0);
+    view.racingLine.geometry.dispose(); view.racingLine.geometry = makeTrackRibbon(trackCurve, 1.05, 320, 0, 1, .24);
     if (view.zoneGroup) { view.trackScene.remove(view.zoneGroup); view.zoneGroup.traverse(child => child.geometry?.dispose()); }
     view.zoneGroup = createZoneHighlights(view.trackScene, trackCurve);
   });
@@ -395,25 +397,42 @@ async function selectTrack(id) {
   await connectGpu(true);
 }
 
-function makeF1Car(primary = '#d8ff7a', secondary = '#15191b', scale = 1) {
+function makeF1Car(primary = '#f1f1ef', secondary = '#15191b', scale = 1, accentColor = '#e6002d') {
   const car = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: primary, roughness: .34, metalness: .42 });
-  const carbon = new THREE.MeshStandardMaterial({ color: secondary, roughness: .52, metalness: .55 });
+  car.rotation.order = 'YXZ';
+  const bodyMat = new THREE.MeshStandardMaterial({ color: primary, roughness: .26, metalness: .34 });
+  const accent = new THREE.MeshStandardMaterial({ color: accentColor, roughness: .3, metalness: .3 });
+  const carbon = new THREE.MeshStandardMaterial({ color: secondary, roughness: .48, metalness: .58 });
   const tireMat = new THREE.MeshStandardMaterial({ color: '#050607', roughness: .88, metalness: .04 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(10, 3.2, 27), bodyMat); body.position.y = 3.8; car.add(body);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(3.1, 19, 8), bodyMat); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 3.1, -19); car.add(nose);
-  const cockpit = new THREE.Mesh(new THREE.SphereGeometry(4.4, 18, 10, 0, Math.PI * 2, 0, Math.PI * .55), carbon); cockpit.scale.set(1, .7, 1.4); cockpit.position.set(0, 6, 3); car.add(cockpit);
-  const rear = new THREE.Mesh(new THREE.BoxGeometry(9, 5.5, 11), bodyMat); rear.position.set(0, 5, 13); car.add(rear);
-  const frontWing = new THREE.Mesh(new THREE.BoxGeometry(24, .75, 4.2), carbon); frontWing.position.set(0, 2.2, -27); car.add(frontWing);
-  const rearWing = new THREE.Mesh(new THREE.BoxGeometry(19, 1.2, 4), carbon); rearWing.position.set(0, 9.2, 18); car.add(rearWing);
-  const rearPillar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 7, 1.2), carbon); rearPillar.position.set(0, 6.2, 18); car.add(rearPillar);
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(14, .7, 31), carbon); floor.position.set(0, 1.5, 3); car.add(floor);
-  for (const axle of [-15, 13]) for (const side of [-1, 1]) {
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 3.8, 16), tireMat);
-    wheel.rotation.z = Math.PI / 2; wheel.position.set(side * 9.2, 4, axle); wheel.name = axle < 0 ? 'front-wheel' : 'rear-wheel'; car.add(wheel);
+  const rimMat = new THREE.MeshStandardMaterial({ color: '#8f9494', roughness: .28, metalness: .82 });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(13.5, .65, 35), carbon); floor.position.set(0, 1.35, 2); car.add(floor);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(8.2, 3.6, 24), bodyMat); body.position.set(0, 3.6, 2); car.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(2.65, 19, 8), bodyMat); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 3, -19); car.add(nose);
+  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(1.6, .38, 20), accent); noseStripe.position.set(0, 4.85, -12); car.add(noseStripe);
+  for (const side of [-1, 1]) {
+    const pod = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.1, 12), bodyMat); pod.position.set(side * 5.1, 3.45, 4.5); pod.rotation.y = side * -.055; car.add(pod);
+    const slash = new THREE.Mesh(new THREE.BoxGeometry(.36, 2.15, 9), accent); slash.position.set(side * 7.76, 3.7, 3.5); slash.rotation.z = side * .17; car.add(slash);
+    const frontFlap = new THREE.Mesh(new THREE.BoxGeometry(10.8, .35, 2.4), carbon); frontFlap.position.set(side * 6.5, 2.25, -27.8); car.add(frontFlap);
+    const rearPlate = new THREE.Mesh(new THREE.BoxGeometry(.55, 6.2, 5.2), carbon); rearPlate.position.set(side * 9.1, 7.2, 17.5); car.add(rearPlate);
   }
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(4.2, .55, 7, 18, Math.PI), carbon); halo.rotation.set(Math.PI / 2, 0, Math.PI); halo.position.set(0, 8.1, 1.5); car.add(halo);
-  car.scale.setScalar(scale); car.userData.frontWheels = car.children.filter(child => child.name === 'front-wheel');
+  const cockpit = new THREE.Mesh(new THREE.SphereGeometry(4.1, 24, 12, 0, Math.PI * 2, 0, Math.PI * .58), carbon); cockpit.scale.set(1, .72, 1.45); cockpit.position.set(0, 5.8, 1.7); car.add(cockpit);
+  const engineCover = new THREE.Mesh(new THREE.ConeGeometry(3.8, 15, 6), bodyMat); engineCover.rotation.x = Math.PI / 2; engineCover.position.set(0, 6, 10); car.add(engineCover);
+  const airbox = new THREE.Mesh(new THREE.BoxGeometry(3.2, 4.4, 3.5), accent); airbox.position.set(0, 8.4, 6.5); car.add(airbox);
+  const frontWing = new THREE.Mesh(new THREE.BoxGeometry(23.5, .65, 4), carbon); frontWing.position.set(0, 1.9, -27); car.add(frontWing);
+  const rearWing = new THREE.Mesh(new THREE.BoxGeometry(18.7, 1.05, 4.2), accent); rearWing.position.set(0, 10, 17.5); car.add(rearWing);
+  const rearPillar = new THREE.Mesh(new THREE.BoxGeometry(1.05, 7.2, 1.05), carbon); rearPillar.position.set(0, 6.5, 17.5); car.add(rearPillar);
+  const wheels = [], frontWheels = [];
+  for (const axle of [-15, 13]) for (const side of [-1, 1]) {
+    const wheel = new THREE.Group(); wheel.position.set(side * 9.1, 4, axle); wheel.name = axle < 0 ? 'front-wheel' : 'rear-wheel';
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.15, 4.15, 3.7, 24), tireMat); tire.rotation.z = Math.PI / 2; wheel.add(tire);
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(2.15, 2.15, 3.82, 18), rimMat); rim.rotation.z = Math.PI / 2; wheel.add(rim);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(3.45, .18, 7, 28), accent); band.rotation.y = Math.PI / 2; band.position.x = side * .05; wheel.add(band);
+    car.add(wheel); wheels.push(wheel); if (axle < 0) frontWheels.push(wheel);
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(4.1, .48, 8, 24, Math.PI), carbon); halo.rotation.set(Math.PI / 2, 0, Math.PI); halo.position.set(0, 8, 1.2); car.add(halo);
+  const haloStem = new THREE.Mesh(new THREE.BoxGeometry(.6, 4.8, .65), carbon); haloStem.position.set(0, 7.1, -1.7); haloStem.rotation.x = -.18; car.add(haloStem);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(12, 28), new THREE.MeshBasicMaterial({ color:'#000000', transparent:true, opacity:.28, depthWrite:false })); shadow.rotation.x = -Math.PI / 2; shadow.scale.set(1, 1.75, 1); shadow.position.y = .35; car.add(shadow);
+  car.scale.setScalar(scale); car.userData.frontWheels = frontWheels; car.userData.wheels = wheels;
   return car;
 }
 
@@ -466,9 +485,13 @@ function makeCockpit(scene, camera, compact = false) {
   return { rig, wheel, roadFlow, kerbFlow, postFlow, rainFlow, opponent, segmentSpan, brakeGlow, throttleGlow, frontWheels: rig.children.filter(child => child.name === 'cockpit-front-wheel') };
 }
 
-function placeCarOnTrack(car, progress, y = 3) {
+function placeCarOnTrack(car, progress, y = 3, frame = null) {
   const u = (progress % 1 + 1) % 1, point = trackCurve.getPointAt(u), tangent = trackCurve.getTangentAt(u);
-  car.position.copy(point); car.position.y = y; car.rotation.y = Math.atan2(tangent.x, tangent.z);
+  car.position.copy(point); car.position.y = y;
+  car.rotation.order = 'YXZ';
+  car.rotation.y = Math.atan2(-tangent.x, -tangent.z);
+  car.rotation.x = Math.max(-.055, Math.min(.055, -(frame?.kinematics?.accel_mps2 || 0) * .006));
+  car.rotation.z = Math.max(-.07, Math.min(.07, (frame?.pose?.roll_rad || 0) * .85));
 }
 
 function animateCockpit(motion, camera, frame, compact = false) {
@@ -512,10 +535,12 @@ function initThree() {
   trackCamera = new THREE.OrthographicCamera(-420, 420, 300, -300, .1, 2000); trackCamera.position.set(0, 650, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
   trackRoad = new THREE.Mesh(makeTrackRibbon(trackCurve, 34, 256, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#26363b', side: THREE.DoubleSide }));
   trackLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 42, 256, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#829092', side: THREE.DoubleSide }));
-  trackScene.add(trackLine, trackRoad, new THREE.AmbientLight('#ffffff', 1));
+  trackRacingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 1.1, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#d7dad8', transparent:true, opacity:.48, side:THREE.DoubleSide }));
+  const trackSun = new THREE.DirectionalLight('#ffffff', 2.2); trackSun.position.set(-180, 420, 130);
+  trackScene.add(trackLine, trackRoad, trackRacingLine, new THREE.HemisphereLight('#ffffff', '#192024', 1.8), trackSun);
   trackZoneGroup = createZoneHighlights(trackScene, trackCurve);
-  carMesh = makeF1Car('#e8ece7', '#c62439', .78);
-  oppMesh = makeF1Car('#f479a2', '#171a1c', .72);
+  carMesh = makeF1Car('#f1f1ef', '#151719', .78, '#e6002d');
+  oppMesh = makeF1Car('#343a3d', '#111315', .72, '#8d9699');
   trackScene.add(carMesh, oppMesh);
   povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
   povCamera = new THREE.PerspectiveCamera(72, 1, .1, 2000);
@@ -531,7 +556,7 @@ function makeComparisonView(canvasId) {
   const canvas = $(canvasId);
   if (!canvas) return null;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = false;
   const trackScene = new THREE.Scene(); trackScene.background = new THREE.Color('#0d1518');
@@ -539,15 +564,17 @@ function makeComparisonView(canvasId) {
   trackCamera.position.set(0, 620, 0); trackCamera.up.set(0, 0, -1); trackCamera.lookAt(0, 0, 0);
   const road = new THREE.Mesh(makeTrackRibbon(trackCurve, 32, 224, 0, 1, .1), new THREE.MeshBasicMaterial({ color: '#26363b', side: THREE.DoubleSide }));
   const edge = new THREE.Mesh(makeTrackRibbon(trackCurve, 40, 224, 0, 1, 0), new THREE.MeshBasicMaterial({ color: '#829092', side: THREE.DoubleSide }));
-  trackScene.add(edge, road, new THREE.AmbientLight('#dce8e4', 1));
+  const racingLine = new THREE.Mesh(makeTrackRibbon(trackCurve, 1.05, 320, 0, 1, .24), new THREE.MeshBasicMaterial({ color:'#d7dad8', transparent:true, opacity:.48, side:THREE.DoubleSide }));
+  const sun = new THREE.DirectionalLight('#ffffff', 2.25); sun.position.set(-170, 420, 150);
+  trackScene.add(edge, road, racingLine, new THREE.HemisphereLight('#eef3f1', '#151a1c', 1.65), sun);
   const zoneGroup = createZoneHighlights(trackScene, trackCurve);
-  const trackCar = makeF1Car('#e8ece7', '#c62439', .62);
-  const trackOpp = makeF1Car('#f479a2', '#171a1c', .56);
+  const trackCar = makeF1Car('#f1f1ef', '#151719', .62, '#e6002d');
+  const trackOpp = makeF1Car('#343a3d', '#111315', .56, '#8d9699');
   trackScene.add(trackCar, trackOpp);
   const povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
   const povCamera = new THREE.PerspectiveCamera(69, 1, .1, 2000);
   const motion = makeCockpit(povScene, povCamera, true);
-  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig: motion.rig, wheel: motion.wheel, motion, road, edge, zoneGroup };
+  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig: motion.rig, wheel: motion.wheel, motion, road, edge, racingLine, zoneGroup };
 }
 function resizeThree() {
   const box = $('visual-wrap').getBoundingClientRect(), w = Math.max(320, box.width), h = Math.max(280, box.height - 2);
@@ -557,17 +584,23 @@ function resizeThree() {
     if (!view) return;
     const box = view.canvas.getBoundingClientRect(), w = Math.max(260, box.width), h = Math.max(190, box.height);
     view.renderer.setSize(w, h, false);
-    view.povCamera.aspect = Math.max(1, (w / 2) / h); view.povCamera.updateProjectionMatrix();
+    const mapAspect = Math.max(.65, (w * .64) / h), halfExtent = 322;
+    if (mapAspect >= 1) { view.trackCamera.left = -halfExtent * mapAspect; view.trackCamera.right = halfExtent * mapAspect; view.trackCamera.top = halfExtent; view.trackCamera.bottom = -halfExtent; }
+    else { view.trackCamera.left = -halfExtent; view.trackCamera.right = halfExtent; view.trackCamera.top = halfExtent / mapAspect; view.trackCamera.bottom = -halfExtent / mapAspect; }
+    view.trackCamera.updateProjectionMatrix();
+    view.povCamera.aspect = Math.max(.62, (w * .36) / h); view.povCamera.updateProjectionMatrix();
   });
   renderComparisonViews();
 }
 function renderThree(frame) {
   if (!trackRenderer || !frame) return;
   const s = (frame.track?.s_m || 0) / (frame.track?.length_m || 5278), gap = frame.race?.gap_ahead_s || .5;
-  placeCarOnTrack(carMesh, s, 4); placeCarOnTrack(oppMesh, s + Math.min(.08, gap / 80), 4);
+  const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame.kinematics?.speed_mps || 70) / currentTrack.lengthM));
+  placeCarOnTrack(carMesh, s, 4, frame); placeCarOnTrack(oppMesh, s + gapProgress, 4, frame);
   const wheelSpin = -(frame.track?.s_m || 0) / 4.1;
-  carMesh.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin; w.rotation.y = (frame.kinematics?.steering_rad || 0) * .7; });
-  oppMesh.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
+  carMesh.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin; });
+  carMesh.userData.frontWheels?.forEach(w => { w.rotation.y = (frame.kinematics?.steering_rad || 0) * .7; });
+  oppMesh.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
   animateCockpit(povMotion, povCamera, frame, false);
   setActiveZone(trackZoneGroup, frame.track?.zone);
   if (state.view === 'pov') povRenderer.render(povScene, povCamera); else trackRenderer.render(trackScene, trackCamera);
@@ -595,17 +628,19 @@ function setComparisonTelemetry(prefix, frame) {
 function renderComparisonView(view, frame, side) {
   if (!view) return;
   const renderer = view.renderer, canvas = view.canvas;
-  const width = canvas.width || 520, height = canvas.height || 240, half = Math.floor(width / 2);
+  const width = canvas.width || 520, height = canvas.height || 240, trackWidth = Math.floor(width * .64);
   renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
-  renderer.setViewport(0, 0, half, height); renderer.setScissor(0, 0, half, height);
+  renderer.setViewport(0, 0, trackWidth, height); renderer.setScissor(0, 0, trackWidth, height);
   const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
-  placeCarOnTrack(view.trackCar, s, 4); placeCarOnTrack(view.trackOpp, s + Math.min(.08, gap / 80), 4);
+  const gapProgress = Math.max(-.08, Math.min(.08, gap * (frame?.kinematics?.speed_mps || 70) / currentTrack.lengthM));
+  placeCarOnTrack(view.trackCar, s, 4, frame); placeCarOnTrack(view.trackOpp, s + gapProgress, 4, frame);
   const wheelSpin = -(frame?.track?.s_m || 0) / 4.1;
-  view.trackCar.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin; w.rotation.y = (frame?.kinematics?.steering_rad || 0) * .7; });
-  view.trackOpp.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
+  view.trackCar.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin; });
+  view.trackCar.userData.frontWheels?.forEach(w => { w.rotation.y = (frame?.kinematics?.steering_rad || 0) * .7; });
+  view.trackOpp.userData.wheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
   setActiveZone(view.zoneGroup, frame?.track?.zone);
   renderer.render(view.trackScene, view.trackCamera);
-  renderer.setViewport(half, 0, width - half, height); renderer.setScissor(half, 0, width - half, height);
+  renderer.setViewport(trackWidth, 0, width - trackWidth, height); renderer.setScissor(trackWidth, 0, width - trackWidth, height);
   animateCockpit(view.motion, view.povCamera, frame, true);
   renderer.render(view.povScene, view.povCamera);
   renderer.setScissorTest(false);

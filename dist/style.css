@@ -267,7 +267,11 @@ body[data-view="delta"] .comparison-heading{padding:0 0 15px;min-height:68px;bor
 body[data-view="delta"] .comparison-grid{margin-top:14px}
 body[data-view="delta"] .comparison-card{box-shadow:0 8px 24px #1113150a}
 body[data-view="delta"] .comparison-card.baseline{border-top:3px solid #111315}
+body[data-view="delta"] .comparison-grid{grid-template-columns:1fr}
 body[data-view="delta"] .comparison-visual{height:430px}
+body[data-view="delta"] .visual-split-labels{grid-template-columns:64% 36%}
 body[data-view="delta"] .comparison-telemetry,body[data-view="delta"] .comparison-time{border-color:#4a5154;background:#080b0ddf}
 body[data-view="delta"] .visual-split-labels span{background:#080b0dcc;border-color:#4a5154}
 body[data-view="delta"] .comparison-metrics{min-height:60px}
+body[data-view="delta"] .metrics-rail{position:sticky;top:18px}
+.geometry-badge{padding:6px 8px;border:1px solid #c5c6c3;color:#6e7375;background:#fff;font:650 8px var(--mono);letter-spacing:.08em;white-space:nowrap}

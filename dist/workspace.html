@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
   <title>Overtiq — Race decision workspace</title>
   <meta name="description" content="GPU-backed F1 race scenario and overtaking decision console for Haas car 31.">
-  <link rel="stylesheet" href="style.css?v=60">
+  <link rel="stylesheet" href="style.css?v=70">
 </head>
 <body data-view="delta">
   <script>if (new URLSearchParams(location.search).get('view') === 'simulator') location.replace('./');</script>
@@ -24,7 +24,7 @@
 
   <main>
     <section class="track-section" aria-label="Track selection">
-      <div class="track-heading"><span class="eyebrow">SCENARIO DELTA</span><label>TRACK<select id="track-select"><option value="MCO">MCO · MONACO</option><option value="ITA">ITA · MONZA</option></select></label></div>
+      <div class="track-heading"><span class="eyebrow">SCENARIO DELTA</span><label>TRACK<select id="track-select"><option value="MCO">MCO · MONACO</option></select></label><span class="geometry-badge">MEASURED LAP GEOMETRY</span></div>
       <div class="track-copy"><h1 id="track-meta">MONACO · Monaco · 3.337 km · 78 LAPS</h1><p id="track-profile">Measured Ocon race line through Monaco, where position, braking precision and traffic matter more than raw pace.</p></div>
       <div class="track-facts"><span id="track-zone-count">3 OVERTAKE WINDOWS · 5 DECISION ZONES</span><span id="data-note">Loading the precomputed race baseline</span></div>
     </section>
@@ -78,8 +78,8 @@
     <section class="comparison-panel" aria-label="Before and after scenario comparison">
       <div class="comparison-heading"><div><span class="eyebrow">SCENARIO DELTA</span><h2>Full race before / after</h2></div><span id="scenario-delta">WAITING FOR GPU BASELINE</span></div>
       <div class="comparison-grid">
-        <article class="comparison-card baseline"><div class="comparison-label"><span>01</span><strong>BASELINE</strong><small id="before-condition">DRY · MEDIUM · GREEN</small></div><div class="comparison-visual"><canvas id="before-race-canvas" aria-label="Baseline track and driver POV"></canvas><div class="visual-split-labels"><span>TRACK</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="before-race-speed">—</b></span><span><small>GEAR</small><b id="before-race-gear">—</b></span><span><small>GAP</small><b id="before-race-gap">—</b></span><span><small>STATE</small><b id="before-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="before-race-time">00:00</b><span id="before-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="before-pass">—</b></span><span><small>DURABLE +3L</small><b id="before-durable">—</b></span><span><small>FINISH</small><b id="before-finish">—</b></span><strong id="before-action">HOLD</strong></div></article>
-        <article class="comparison-card adjusted"><div class="comparison-label"><span>02</span><strong>GPU ADJUSTED</strong><small id="after-condition">LIVE CONTROL STATE</small></div><div class="comparison-visual"><canvas id="after-race-canvas" aria-label="Adjusted track and driver POV"></canvas><div class="visual-split-labels"><span>TRACK</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="after-race-speed">—</b></span><span><small>GEAR</small><b id="after-race-gear">—</b></span><span><small>GAP</small><b id="after-race-gap">—</b></span><span><small>STATE</small><b id="after-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="after-race-time">00:00</b><span id="after-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="after-pass">—</b></span><span><small>DURABLE +3L</small><b id="after-durable">—</b></span><span><small>FINISH</small><b id="after-finish">—</b></span><strong id="after-action">HOLD</strong></div></article>
+        <article class="comparison-card baseline"><div class="comparison-label"><span>01</span><strong>BASELINE</strong><small id="before-condition">DRY · MEDIUM · GREEN</small></div><div class="comparison-visual"><canvas id="before-race-canvas" aria-label="Baseline track and driver POV"></canvas><div class="visual-split-labels"><span>MEASURED RACE LINE</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="before-race-speed">—</b></span><span><small>GEAR</small><b id="before-race-gear">—</b></span><span><small>GAP</small><b id="before-race-gap">—</b></span><span><small>STATE</small><b id="before-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="before-race-time">00:00</b><span id="before-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="before-pass">—</b></span><span><small>DURABLE +3L</small><b id="before-durable">—</b></span><span><small>FINISH</small><b id="before-finish">—</b></span><strong id="before-action">HOLD</strong></div></article>
+        <article class="comparison-card adjusted"><div class="comparison-label"><span>02</span><strong>GPU ADJUSTED</strong><small id="after-condition">LIVE CONTROL STATE</small></div><div class="comparison-visual"><canvas id="after-race-canvas" aria-label="Adjusted track and driver POV"></canvas><div class="visual-split-labels"><span>MEASURED RACE LINE</span><span>DRIVER POV</span></div><div class="comparison-telemetry"><span><small>SPEED</small><b id="after-race-speed">—</b></span><span><small>GEAR</small><b id="after-race-gear">—</b></span><span><small>GAP</small><b id="after-race-gap">—</b></span><span><small>STATE</small><b id="after-race-state">WAIT</b></span></div><div class="comparison-time"><span>RACE TIME</span><b id="after-race-time">00:00</b><span id="after-race-lap">L35</span></div></div><div class="comparison-metrics"><span><small>PASS ≤60S</small><b id="after-pass">—</b></span><span><small>DURABLE +3L</small><b id="after-durable">—</b></span><span><small>FINISH</small><b id="after-finish">—</b></span><strong id="after-action">HOLD</strong></div></article>
       </div>
     </section>
 
@@ -93,6 +93,6 @@
     <section class="runtime-strip" aria-label="Remote compute status"><span>SIM <b id="compute-sim">CONNECTING</b></span><span>PHYSICS <b id="compute-physics">CONNECTING</b></span><span>MODEL <b id="compute-model">WAITING</b></span><span>TELEMETRY <b id="compute-telemetry">NO FRAME</b></span><span>GPU TIME <b id="compute-latency">—</b></span><span>RUNS <b id="compute-requests">0</b></span><small id="footer-status">REMOTE GPU CALCULATIONS</small></section>
   </main>
   <script type="importmap">{"imports":{"three":"./three.module.js"}}</script>
-  <script type="module" src="app.js?v=60"></script>
+  <script type="module" src="app.js?v=70"></script>
 </body>
 </html>
