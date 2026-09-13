@@ -20,3 +20,11 @@ body{font-size:16px}.eyebrow,.panel-top,.meta-note,.session,.tag,.map-legend,.tr
 /* Track catalog and live overtaking-zone highlights. */
 .track-meta{display:flex;gap:13px;flex-wrap:wrap;margin-top:7px;color:#b7f578;font:10px var(--mono);letter-spacing:.4px}.track-meta span+span{color:#d6b555}.track-profile{margin-top:6px;font:11px var(--mono);color:#71817e;max-width:760px}.map-zone-list{position:absolute;left:22px;right:22px;top:56px;z-index:5;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}.map-zone-chip{pointer-events:auto;display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid #4c3d47;background:#0a1012e8;color:#f479a2;border-radius:2px;font:9px var(--mono);letter-spacing:.5px;cursor:pointer;transition:.2s ease}.map-zone-chip span{color:#a8b4b0}.map-zone-chip.braking{color:#d6b555;border-color:#504833}.map-zone-chip.active,.map-zone-chip:hover{background:#b7f578;color:#101710;border-color:#b7f578}.map-zone-chip.active span,.map-zone-chip:hover span{color:#23321d}.zone-row-note{display:block;margin-top:4px;color:#70807d;font:9px var(--mono);font-weight:400;line-height:1.25;max-width:260px}.zone-panel tr{transition:background .2s ease}.zone-panel tr.active td{background:#b7f57810}.zone-panel tr.active td:first-child b{color:var(--lime)}
 @media(max-width:800px){.map-zone-list{left:12px;right:12px;top:48px}.map-zone-chip{font-size:8px;padding:5px 6px}.map-zone-chip span{display:none}.track-meta{font-size:9px}.track-profile{font-size:10px}}
+
+/* The scenario comparison is an active race view, not a static thumbnail. */
+.comparison-visual{height:360px;background:radial-gradient(circle at 50% 25%,#1a2829 0,#091113 72%);box-shadow:inset 0 0 48px #0008}
+.comparison-visual canvas{image-rendering:auto}
+.comparison-card.adjusted .comparison-visual{box-shadow:inset 0 0 48px #0008,0 0 24px #8fca5530}
+.event-button:disabled{opacity:1;cursor:default;color:var(--lime);border-color:#5f7d46;background:#172018}
+@media(max-width:900px){.comparison-visual{height:300px}}
+@media(max-width:650px){.comparison-visual{height:270px}}

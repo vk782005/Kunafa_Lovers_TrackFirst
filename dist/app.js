@@ -44,7 +44,7 @@ const state = {
   snapshotRestored: false
 };
 
-let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig;
+let trackRenderer, povRenderer, trackScene, povScene, trackCamera, povCamera, carMesh, oppMesh, wheelMesh, povRig, povMotion;
 let currentTrack = getTrack(state.controls.track_id), trackCurve;
 let trackRoad, trackLine, trackZoneGroup;
 const comparisonViews = { before: null, after: null };
@@ -172,6 +172,7 @@ async function connectGpu(force = false) {
       $('data-note').textContent = 'Precomputed race baseline loaded · GPU ready for an adjusted scenario';
       $('compute-requests').textContent = '0 LIVE RUNS'; $('sim-state').innerHTML = '<i class="live-dot"></i> BASELINE READY · GPU IDLE';
       $('live-stream').textContent = 'BASELINE LOADED'; $('live-stream').disabled = true;
+      state.playing = true; $('play').textContent = 'Ⅱ';
       // Rendering is presentation work. Once bootstrap returned 200, a
       // renderer failure must never be reclassified as a GPU connection
       // failure or schedule another POST.
@@ -331,6 +332,115 @@ function selectTrack(id) {
   $('sim-state').innerHTML = '<i class="live-dot"></i> TRACK CHANGED · APPLY TO GPU';
   updateTrackGeometry(); saveSnapshot();
 }
+
+function makeF1Car(primary = '#d8ff7a', secondary = '#15191b', scale = 1) {
+  const car = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: primary, roughness: .34, metalness: .42 });
+  const carbon = new THREE.MeshStandardMaterial({ color: secondary, roughness: .52, metalness: .55 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: '#050607', roughness: .88, metalness: .04 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(10, 3.2, 27), bodyMat); body.position.y = 3.8; car.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(3.1, 19, 8), bodyMat); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 3.1, -19); car.add(nose);
+  const cockpit = new THREE.Mesh(new THREE.SphereGeometry(4.4, 18, 10, 0, Math.PI * 2, 0, Math.PI * .55), carbon); cockpit.scale.set(1, .7, 1.4); cockpit.position.set(0, 6, 3); car.add(cockpit);
+  const rear = new THREE.Mesh(new THREE.BoxGeometry(9, 5.5, 11), bodyMat); rear.position.set(0, 5, 13); car.add(rear);
+  const frontWing = new THREE.Mesh(new THREE.BoxGeometry(24, .75, 4.2), carbon); frontWing.position.set(0, 2.2, -27); car.add(frontWing);
+  const rearWing = new THREE.Mesh(new THREE.BoxGeometry(19, 1.2, 4), carbon); rearWing.position.set(0, 9.2, 18); car.add(rearWing);
+  const rearPillar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 7, 1.2), carbon); rearPillar.position.set(0, 6.2, 18); car.add(rearPillar);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(14, .7, 31), carbon); floor.position.set(0, 1.5, 3); car.add(floor);
+  for (const axle of [-15, 13]) for (const side of [-1, 1]) {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 3.8, 16), tireMat);
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(side * 9.2, 4, axle); wheel.name = axle < 0 ? 'front-wheel' : 'rear-wheel'; car.add(wheel);
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(4.2, .55, 7, 18, Math.PI), carbon); halo.rotation.set(Math.PI / 2, 0, Math.PI); halo.position.set(0, 8.1, 1.5); car.add(halo);
+  car.scale.setScalar(scale); car.userData.frontWheels = car.children.filter(child => child.name === 'front-wheel');
+  return car;
+}
+
+function makeCockpit(scene, camera, compact = false) {
+  const rig = new THREE.Group(); scene.add(rig);
+  const carbon = new THREE.MeshStandardMaterial({ color: '#090d0f', roughness: .42, metalness: .52 });
+  const haas = new THREE.MeshStandardMaterial({ color: '#e5e8e3', roughness: .36, metalness: .32 });
+  const red = new THREE.MeshStandardMaterial({ color: '#c7273b', roughness: .34, metalness: .28 });
+  const asphalt = new THREE.MeshStandardMaterial({ color: '#171b1c', roughness: .97, metalness: .01 });
+  const width = compact ? 120 : 170, depth = compact ? 1000 : 1500, roadHalf = compact ? 16 : 20;
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), asphalt); road.rotation.x = -Math.PI / 2; road.position.z = -depth * .47; rig.add(road);
+  const verge = new THREE.Mesh(new THREE.PlaneGeometry(width * 2.8, depth), new THREE.MeshStandardMaterial({ color: '#17251d', roughness: 1 })); verge.rotation.x = -Math.PI / 2; verge.position.set(0, -.07, -depth * .47); rig.add(verge); road.renderOrder = 1;
+  const roadFlow = new THREE.Group(), kerbFlow = new THREE.Group(), postFlow = new THREE.Group(); rig.add(roadFlow, kerbFlow, postFlow);
+  const segmentSpan = compact ? 720 : 1080;
+  for (let i = 0; i < 34; i++) {
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(.36, .04, compact ? 7 : 9), new THREE.MeshBasicMaterial({ color: '#d6ddd7' }));
+    mark.userData.baseZ = -i * (compact ? 25 : 34) - 24; mark.position.set(0, .06, mark.userData.baseZ); roadFlow.add(mark);
+  }
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 52; i++) {
+      const kerb = new THREE.Mesh(new THREE.BoxGeometry(compact ? 3.2 : 4.2, .25, compact ? 8 : 11), new THREE.MeshStandardMaterial({ color: i % 2 ? '#d52f45' : '#eceee8', roughness: .82 }));
+      kerb.userData.baseZ = -i * (compact ? 15 : 21) - 18; kerb.position.set(side * roadHalf, .14, kerb.userData.baseZ); kerbFlow.add(kerb);
+    }
+    for (let i = 0; i < 30; i++) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(.45, compact ? 5 : 7, .45), new THREE.MeshStandardMaterial({ color: '#7f8b87', roughness: .7, metalness: .45 }));
+      post.userData.baseZ = -i * (compact ? 26 : 36) - 20; post.position.set(side * (roadHalf + 5), post.geometry.parameters.height / 2, post.userData.baseZ); postFlow.add(post);
+    }
+  }
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(compact ? 3.7 : 4.8, compact ? 36 : 44, 8), haas); nose.rotation.x = -Math.PI / 2; nose.position.set(0, compact ? -3.5 : -2.5, compact ? -7 : -10); rig.add(nose);
+  const noseStripe = new THREE.Mesh(new THREE.BoxGeometry(compact ? 2.4 : 3.1, .35, compact ? 25 : 32), red); noseStripe.position.set(0, compact ? -.3 : .3, compact ? -5 : -9); rig.add(noseStripe);
+  for (const side of [-1, 1]) {
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(compact ? 5 : 6.2, compact ? 5 : 6.2, compact ? 3.8 : 4.6, 18), new THREE.MeshStandardMaterial({ color: '#050607', roughness: .92 }));
+    tire.rotation.z = Math.PI / 2; tire.position.set(side * (compact ? 15.5 : 18.5), compact ? 1.8 : 2.5, compact ? -12 : -16); tire.name = 'cockpit-front-wheel'; rig.add(tire);
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(compact ? 4.4 : 5.4, compact ? 1.8 : 2.2, compact ? 2.1 : 2.6), carbon); mirror.position.set(side * (compact ? 10 : 12), compact ? 7.5 : 9.5, compact ? 8 : 7); rig.add(mirror);
+    const stay = new THREE.Mesh(new THREE.BoxGeometry(.45, compact ? 5 : 6, .45), carbon); stay.position.set(side * (compact ? 8 : 10), compact ? 5.5 : 7, compact ? 8 : 7); stay.rotation.z = side * -.35; rig.add(stay);
+  }
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(compact ? 11.2 : 13.8, compact ? 1.25 : 1.55, 9, 38, Math.PI), carbon); halo.rotation.z = Math.PI; halo.position.set(0, compact ? 12 : 15, compact ? 4 : 3); rig.add(halo);
+  const haloStem = new THREE.Mesh(new THREE.BoxGeometry(compact ? .85 : 1.05, compact ? 12 : 15, compact ? .85 : 1.05), carbon); haloStem.position.set(0, compact ? 9 : 11, compact ? -4 : -6); haloStem.rotation.x = -.15; rig.add(haloStem);
+  const wheel = new THREE.Group(); wheel.position.set(0, compact ? .5 : 1, compact ? 13.5 : 16); rig.add(wheel);
+  const wheelBody = new THREE.Mesh(new THREE.BoxGeometry(compact ? 9.5 : 12, compact ? 4.8 : 6, compact ? 1.8 : 2.2), carbon); wheel.add(wheelBody);
+  for (const side of [-1, 1]) { const grip = new THREE.Mesh(new THREE.CylinderGeometry(compact ? 1.7 : 2.1, compact ? 1.7 : 2.1, compact ? 5.8 : 7, 12), carbon); grip.rotation.x = Math.PI / 2; grip.position.x = side * (compact ? 5.2 : 6.5); wheel.add(grip); }
+  const display = new THREE.Mesh(new THREE.BoxGeometry(compact ? 6.2 : 7.6, compact ? 2.1 : 2.6, .3), new THREE.MeshBasicMaterial({ color: '#b7f578' })); display.position.z = compact ? -1 : -1.25; wheel.add(display);
+  const brakeGlow = new THREE.Mesh(new THREE.BoxGeometry(compact ? 5 : 6, .4, .4), new THREE.MeshBasicMaterial({ color: '#ff4058' })); brakeGlow.position.set(-4, compact ? -4.5 : -5.3, 1); wheel.add(brakeGlow);
+  const throttleGlow = new THREE.Mesh(new THREE.BoxGeometry(compact ? 5 : 6, .4, .4), new THREE.MeshBasicMaterial({ color: '#b7f578' })); throttleGlow.position.set(4, compact ? -4.5 : -5.3, 1); wheel.add(throttleGlow);
+  const opponent = makeF1Car('#e96a86', '#16191b', compact ? .17 : .22); opponent.position.set(0, .5, compact ? -70 : -90); rig.add(opponent);
+  const rainFlow = new THREE.Group(); rig.add(rainFlow);
+  for (let i = 0; i < (compact ? 28 : 40); i++) { const drop = new THREE.Mesh(new THREE.BoxGeometry(.035, compact ? 2.6 : 3.4, .035), new THREE.MeshBasicMaterial({ color: '#9ed9ff', transparent: true, opacity: .62 })); drop.userData.baseY = 5 + (i % 8) * 4; drop.userData.baseZ = -18 - i * (compact ? 4 : 5); drop.position.set(((i * 17) % 39) - 19, drop.userData.baseY, drop.userData.baseZ); rainFlow.add(drop); }
+  scene.add(new THREE.HemisphereLight('#bcd8e4', '#0c1214', 1.45), new THREE.DirectionalLight('#ffffff', 1.8));
+  camera.position.set(0, compact ? 14 : 18, compact ? 27 : 31); camera.rotation.x = -.09;
+  return { rig, wheel, roadFlow, kerbFlow, postFlow, rainFlow, opponent, segmentSpan, brakeGlow, throttleGlow, frontWheels: rig.children.filter(child => child.name === 'cockpit-front-wheel') };
+}
+
+function placeCarOnTrack(car, progress, y = 3) {
+  const u = (progress % 1 + 1) % 1, point = trackCurve.getPointAt(u), tangent = trackCurve.getTangentAt(u);
+  car.position.copy(point); car.position.y = y; car.rotation.y = Math.atan2(tangent.x, tangent.z);
+}
+
+function animateCockpit(motion, camera, frame, compact = false) {
+  if (!motion || !frame) return;
+  const k = frame.kinematics || {}, controls = frame.controls || {}, track = frame.track || {}, flags = frame.flags || {};
+  const steer = k.steering_rad || 0, speed = k.speed_mps || 0, yaw = k.yaw_rate_radps || 0, t = frame.t || 0;
+  const slip = Math.max(...Object.values(frame.wheels || {}).map(w => Math.abs(w.slip_ratio || 0)), 0);
+  const vibration = Math.min(compact ? .13 : .2, speed * .0012 + slip * .24);
+  motion.wheel.rotation.z = -steer * .78;
+  motion.frontWheels.forEach(wheel => { wheel.rotation.x = -(track.s_m || 0) / 4.1; wheel.rotation.y = steer * .72; });
+  motion.rig.rotation.z = (frame.pose?.roll_rad || 0) * .65 + Math.sin(t * 48) * vibration * .055;
+  motion.rig.rotation.x = (frame.pose?.pitch_rad || 0) * .45 - (k.accel_mps2 || 0) * .006;
+  motion.rig.position.x = -steer * (compact ? .55 : .8);
+  camera.position.x = steer * (compact ? .3 : .45) + Math.sin(t * 37) * vibration;
+  camera.position.y = (compact ? 14 : 18) + Math.abs(yaw) * 1.6 + Math.sin(t * 43) * vibration;
+  if (motion.lastGear != null && motion.lastGear !== controls.gear) motion.shiftKick = compact ? .22 : .32;
+  motion.lastGear = controls.gear; motion.shiftKick = (motion.shiftKick || 0) * .82;
+  camera.position.z = (compact ? 27 : 31) - motion.shiftKick;
+  camera.rotation.y = steer * .085; camera.rotation.z = -yaw * .045;
+  const phase = (track.s_m || 0) % motion.segmentSpan;
+  for (const group of [motion.roadFlow, motion.kerbFlow, motion.postFlow]) for (const item of group.children) item.position.z = ((item.userData.baseZ + phase + motion.segmentSpan) % motion.segmentSpan) - motion.segmentSpan;
+  motion.brakeGlow.scale.x = .15 + (controls.brake || 0) * .85; motion.throttleGlow.scale.x = .15 + (controls.throttle || 0) * .85;
+  motion.brakeGlow.visible = (controls.brake || 0) > .02; motion.throttleGlow.visible = (controls.throttle || 0) > .02;
+  motion.opponent.position.z = -(32 + Math.min(160, Math.max(.08, frame.race?.gap_ahead_s || .5) * 52));
+  motion.opponent.position.x = Math.sin(t * .45) * 1.2 - steer * 2;
+  const rain = Math.max(frame.tires?.rain_intensity || 0, frame.race?.rain_intensity || 0); motion.rainFlow.visible = rain > .03;
+  motion.rainFlow.children.forEach((drop, i) => { drop.position.y = 3 + ((drop.userData.baseY - t * (28 + speed * .12) + i * .7) % 34 + 34) % 34; drop.material.opacity = .25 + rain * .65; });
+  sceneBackgroundForFlags(motion.rig.parent, flags, frame.race?.weather);
+}
+
+function sceneBackgroundForFlags(scene, flags = {}, weather = 'DRY') {
+  if (!scene) return;
+  scene.background = new THREE.Color(flags.red_flag ? '#351117' : flags.vsc ? '#292510' : weather === 'WET' ? '#16232b' : '#14242c');
+}
 function initThree() {
   const trackCanvas = $('track-canvas'), povCanvas = $('pov-canvas');
   trackRenderer = new THREE.WebGLRenderer({ canvas: trackCanvas, antialias: true, alpha: true });
@@ -342,26 +452,12 @@ function initThree() {
   trackLine = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 160, 1.5, 5, true), new THREE.MeshBasicMaterial({ color: '#667879' }));
   trackScene.add(trackRoad, trackLine, new THREE.AmbientLight('#ffffff', 1));
   trackZoneGroup = createZoneHighlights(trackScene, trackCurve);
-  carMesh = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), new THREE.MeshBasicMaterial({ color: '#b7f578' }));
-  oppMesh = new THREE.Mesh(new THREE.SphereGeometry(8, 16, 12), new THREE.MeshBasicMaterial({ color: '#f479a2' }));
+  carMesh = makeF1Car('#e8ece7', '#c62439', .78);
+  oppMesh = makeF1Car('#f479a2', '#171a1c', .72);
   trackScene.add(carMesh, oppMesh);
   povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
-  povCamera = new THREE.PerspectiveCamera(70, 1, .1, 2000); povCamera.position.set(0, 18, 28); povCamera.rotation.x = -.08;
-  povRig = new THREE.Group(); povScene.add(povRig);
-  const roadPlane = new THREE.Mesh(new THREE.PlaneGeometry(300, 1800), new THREE.MeshStandardMaterial({ color: '#141a1d', roughness: .96, metalness: .02 })); roadPlane.rotation.x = -Math.PI / 2; roadPlane.position.z = -700; povRig.add(roadPlane);
-  for (let i = 0; i < 34; i++) { const dash = new THREE.Mesh(new THREE.BoxGeometry(.42, .035, 10), new THREE.MeshBasicMaterial({ color: '#7a8580' })); dash.position.set(0, .05, -i * 48 - 32); povRig.add(dash); }
-  for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(2, 8, 1500), new THREE.MeshStandardMaterial({ color: '#667471', roughness: .7, metalness: .35 })); rail.position.set(side * 21, 4, -700); povRig.add(rail);
-    for (let i = 0; i < 28; i++) { const kerb = new THREE.Mesh(new THREE.BoxGeometry(4, .28, 18), new THREE.MeshStandardMaterial({ color: i % 2 ? '#cf6170' : '#eef0dc', roughness: .82 })); kerb.position.set(side * 19, .3, -i * 47 - 35); povRig.add(kerb); }
-  }
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(14, 1.7, 8, 40, Math.PI), new THREE.MeshBasicMaterial({ color: '#080b0d' })); halo.rotation.z = Math.PI; halo.position.set(0, 14, 2); povRig.add(halo);
-  wheelMesh = new THREE.Group(); wheelMesh.position.set(0, -1, 18); povRig.add(wheelMesh);
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(9, 2, 8, 24), new THREE.MeshBasicMaterial({ color: '#060809' })); wheel.scale.set(1.2, .75, .6); wheelMesh.add(wheel);
-  for (let i = 0; i < 3; i++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(1.2, 11, 1), new THREE.MeshBasicMaterial({ color: '#788486' })); spoke.rotation.z = i * Math.PI / 3; wheelMesh.add(spoke); }
-  const dash = new THREE.Mesh(new THREE.BoxGeometry(38, 4, 11), new THREE.MeshBasicMaterial({ color: '#0a0e10' })); dash.position.set(0, 5, 13); povRig.add(dash);
-  const dashScreen = new THREE.Mesh(new THREE.BoxGeometry(12, 3, .35), new THREE.MeshBasicMaterial({ color: '#b7f578' })); dashScreen.position.set(0, 7.1, 8); povRig.add(dashScreen);
-  const sidePod = new THREE.Mesh(new THREE.BoxGeometry(9, 5, 23), new THREE.MeshStandardMaterial({ color: '#20282b', roughness: .58, metalness: .3 })); sidePod.position.set(-20, 1, 13); povRig.add(sidePod); povRig.add(sidePod.clone().translateX(40));
-  povScene.add(new THREE.HemisphereLight('#bfd7e6', '#101719', 1.2), new THREE.DirectionalLight('#dbe9e5', 1.35));
+  povCamera = new THREE.PerspectiveCamera(72, 1, .1, 2000);
+  povMotion = makeCockpit(povScene, povCamera, false); povRig = povMotion.rig; wheelMesh = povMotion.wheel;
   initComparisonViews();
   resizeThree(); window.addEventListener('resize', resizeThree);
 }
@@ -383,28 +479,13 @@ function makeComparisonView(canvasId) {
   const edge = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 128, 1.4, 5, true), new THREE.MeshBasicMaterial({ color: '#728383' }));
   trackScene.add(road, edge, new THREE.AmbientLight('#dce8e4', 1));
   const zoneGroup = createZoneHighlights(trackScene, trackCurve);
-  const trackCar = new THREE.Mesh(new THREE.SphereGeometry(9, 14, 10), new THREE.MeshBasicMaterial({ color: '#b7f578' }));
-  const trackOpp = new THREE.Mesh(new THREE.SphereGeometry(7, 14, 10), new THREE.MeshBasicMaterial({ color: '#f479a2' }));
+  const trackCar = makeF1Car('#e8ece7', '#c62439', .62);
+  const trackOpp = makeF1Car('#f479a2', '#171a1c', .56);
   trackScene.add(trackCar, trackOpp);
   const povScene = new THREE.Scene(); povScene.background = new THREE.Color('#111e26');
-  const povCamera = new THREE.PerspectiveCamera(67, 1, .1, 2000); povCamera.position.set(0, 14, 26); povCamera.rotation.x = -.08;
-  const povRig = new THREE.Group(); povScene.add(povRig);
-  const roadPlane = new THREE.Mesh(new THREE.PlaneGeometry(150, 1100), new THREE.MeshStandardMaterial({ color: '#141a1d', roughness: .97, metalness: .02 }));
-  roadPlane.rotation.x = -Math.PI / 2; roadPlane.position.z = -500; povRig.add(roadPlane);
-  for (let i = 0; i < 24; i++) { const dash = new THREE.Mesh(new THREE.BoxGeometry(.3, .035, 7), new THREE.MeshBasicMaterial({ color: '#89948e' })); dash.position.set(0, .05, -i * 40 - 26); povRig.add(dash); }
-  for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6, 1100), new THREE.MeshStandardMaterial({ color: '#5e706d', roughness: .75, metalness: .25 })); rail.position.set(side * 17, 3, -500); povRig.add(rail);
-    for (let i = 0; i < 24; i++) { const kerb = new THREE.Mesh(new THREE.BoxGeometry(3.2, .25, 14), new THREE.MeshStandardMaterial({ color: i % 2 ? '#cf6170' : '#eef0dc', roughness: .82 })); kerb.position.set(side * 15, .28, -i * 40 - 28); povRig.add(kerb); }
-  }
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(11.5, 1.35, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: '#080b0d' })); halo.rotation.z = Math.PI; halo.position.set(0, 12, 2); povRig.add(halo);
-  const wheel = new THREE.Group(); wheel.position.set(0, -1.5, 18); povRig.add(wheel);
-  const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(7.2, 1.5, 8, 22), new THREE.MeshBasicMaterial({ color: '#07090a' })); wheelRing.scale.set(1.18, .72, .56); wheel.add(wheelRing);
-  for (let i = 0; i < 3; i++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(.9, 8.5, .8), new THREE.MeshBasicMaterial({ color: '#778485' })); spoke.rotation.z = i * Math.PI / 3; wheel.add(spoke); }
-  const dash = new THREE.Mesh(new THREE.BoxGeometry(31, 3.2, 9), new THREE.MeshBasicMaterial({ color: '#0a0e10' })); dash.position.set(0, 4.7, 12); povRig.add(dash);
-  const screen = new THREE.Mesh(new THREE.BoxGeometry(9, 2.2, .3), new THREE.MeshBasicMaterial({ color: '#b7f578' })); screen.position.set(0, 6.2, 8); povRig.add(screen);
-  for (const side of [-1, 1]) { const pod = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 18), new THREE.MeshStandardMaterial({ color: '#20282b', roughness: .6, metalness: .25 })); pod.position.set(side * 16, 1, 13); povRig.add(pod); }
-  povScene.add(new THREE.HemisphereLight('#bfd7e6', '#101719', 1.15), new THREE.DirectionalLight('#dbe9e5', 1.2));
-  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig, wheel, road, edge, zoneGroup };
+  const povCamera = new THREE.PerspectiveCamera(69, 1, .1, 2000);
+  const motion = makeCockpit(povScene, povCamera, true);
+  return { canvas, renderer, trackScene, trackCamera, trackCar, trackOpp, povScene, povCamera, povRig: motion.rig, wheel: motion.wheel, motion, road, edge, zoneGroup };
 }
 function resizeThree() {
   const box = $('visual-wrap').getBoundingClientRect(), w = Math.max(320, box.width), h = Math.max(280, box.height - 2);
@@ -421,14 +502,11 @@ function resizeThree() {
 function renderThree(frame) {
   if (!trackRenderer || !frame) return;
   const s = (frame.track?.s_m || 0) / (frame.track?.length_m || 5278), gap = frame.race?.gap_ahead_s || .5;
-  const p = trackCurve.getPointAt((s % 1 + 1) % 1), op = trackCurve.getPointAt((s + Math.min(.08, gap / 80)) % 1);
-  carMesh.position.copy(p); carMesh.position.y = 12; oppMesh.position.copy(op); oppMesh.position.y = 10;
-  const steer = frame.kinematics?.steering_rad || 0, speed = frame.kinematics?.speed_mps || 78;
-  wheelMesh.rotation.z = -steer * .7; povRig.rotation.z = (frame.pose?.roll_rad || 0) * .65; povRig.rotation.x = (frame.pose?.pitch_rad || 0) * .5;
-  povCamera.position.y = 18 + Math.min(.8, Math.abs(frame.kinematics?.yaw_rate_radps || 0) * 3);
-  povCamera.position.z = 28 - Math.min(1.4, Math.abs(speed - 78) * .025);
-  povCamera.rotation.y = steer * .035;
-  povRig.position.z = -((frame.track?.s_m || 0) % 42) * .018;
+  placeCarOnTrack(carMesh, s, 4); placeCarOnTrack(oppMesh, s + Math.min(.08, gap / 80), 4);
+  const wheelSpin = -(frame.track?.s_m || 0) / 4.1;
+  carMesh.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin; w.rotation.y = (frame.kinematics?.steering_rad || 0) * .7; });
+  oppMesh.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
+  animateCockpit(povMotion, povCamera, frame, false);
   setActiveZone(trackZoneGroup, frame.track?.zone);
   if (state.view === 'pov') povRenderer.render(povScene, povCamera); else trackRenderer.render(trackScene, trackCamera);
 }
@@ -459,15 +537,14 @@ function renderComparisonView(view, frame, side) {
   renderer.setScissorTest(false); renderer.clear(true, true, true); renderer.setScissorTest(true);
   renderer.setViewport(0, 0, half, height); renderer.setScissor(0, 0, half, height);
   const s = (frame?.track?.s_m || 0) / (frame?.track?.length_m || 5278), gap = frame?.race?.gap_ahead_s || .5;
-  const p = trackCurve.getPointAt((s % 1 + 1) % 1), op = trackCurve.getPointAt((s + Math.min(.08, gap / 80)) % 1);
-  view.trackCar.position.copy(p); view.trackCar.position.y = 11; view.trackOpp.position.copy(op); view.trackOpp.position.y = 9;
+  placeCarOnTrack(view.trackCar, s, 4); placeCarOnTrack(view.trackOpp, s + Math.min(.08, gap / 80), 4);
+  const wheelSpin = -(frame?.track?.s_m || 0) / 4.1;
+  view.trackCar.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin; w.rotation.y = (frame?.kinematics?.steering_rad || 0) * .7; });
+  view.trackOpp.userData.frontWheels?.forEach(w => { w.rotation.x = wheelSpin - gap; });
   setActiveZone(view.zoneGroup, frame?.track?.zone);
   renderer.render(view.trackScene, view.trackCamera);
   renderer.setViewport(half, 0, width - half, height); renderer.setScissor(half, 0, width - half, height);
-  const steer = frame?.kinematics?.steering_rad || 0, speed = frame?.kinematics?.speed_mps || 78, yaw = frame?.kinematics?.yaw_rate_radps || 0;
-  view.wheel.rotation.z = -steer * .7; view.povRig.rotation.z = (frame?.pose?.roll_rad || 0) * .65; view.povRig.rotation.x = (frame?.pose?.pitch_rad || 0) * .5;
-  view.povCamera.position.y = 14 + Math.min(.6, Math.abs(yaw) * 2); view.povCamera.position.z = 26 - Math.min(1.1, Math.abs(speed - 78) * .02); view.povCamera.rotation.y = steer * .035;
-  view.povRig.position.z = -((frame?.track?.s_m || 0) % 42) * .02;
+  animateCockpit(view.motion, view.povCamera, frame, true);
   renderer.render(view.povScene, view.povCamera);
   renderer.setScissorTest(false);
 }
@@ -543,12 +620,13 @@ async function applyScenario() {
     const ans = result.answers || {}; const cond = [state.controls.weather, state.controls.tire_compound, state.controls.vsc ? 'VSC' : '', state.controls.red_flag ? 'RED FLAG' : ''].filter(Boolean).join(' · ');
     $('scenario-result').className = 'scenario-result success'; $('scenario-result').textContent = 'COMPLETE · ' + elapsed + ' ms · ' + (result.recommendation?.action || 'HOLD') + ' · pass ' + fmtPct(ans.can_pass_within_60s?.probability) + ' · durable ' + fmtPct(ans.durable_pass?.probability) + ' · expected ' + (ans.finish_position?.expected == null ? '—' : 'P' + Number(ans.finish_position.expected).toFixed(1)) + (cond ? ' · ' + cond : '');
     $('sim-state').innerHTML = '<i class="live-dot"></i> COMPLETE · ADJUSTED SCENARIO LOADED';
+    state.playing = true; $('play').textContent = 'Ⅱ';
   }).catch(error => { setStatus('GPU ERROR', false); $('scenario-result').className = 'scenario-result failed'; $('scenario-result').textContent = 'FAILED · ' + error.message; $('sim-state').innerHTML = '<i class="live-dot"></i> SCENARIO FAILED'; }).finally(() => { state.assessmentPromise = null; $('apply-scenario').disabled = false; $('apply-scenario').textContent = 'APPLY TO GPU SIMULATOR'; });
   return state.assessmentPromise;
 }
 function tick(now) {
   const dt = state.lastNow ? Math.min(.1, (now - state.lastNow) / 1000) : 0; state.lastNow = now;
-  if (state.playing) { seek(state.time + dt * state.rate); if (state.time >= 60) { state.playing = false; $('play').textContent = '▶'; } }
+  if (state.playing) { const next = state.time + dt * state.rate; seek(next >= 60 ? next % 60 : next); }
   requestAnimationFrame(tick);
 }
 
