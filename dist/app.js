@@ -191,11 +191,14 @@ function conditionLabel(controls) {
 function finishPosition(assessment) {
   const finish = assessment?.answers?.finish_position || {};
   if (finish.most_likely != null) return Math.round(Number(finish.most_likely));
-  if (finish.expected != null) return Math.round(Number(finish.expected));
   const histogram = Array.isArray(finish.histogram) ? finish.histogram : [];
   if (histogram.length) return Math.round(Number(histogram.reduce((best, item) => Number(item.probability || 0) > Number(best.probability || 0) ? item : best, histogram[0]).position));
-  const unique = [...new Set((finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite))];
-  return unique.length ? unique[Math.floor(unique.length / 2)] : null;
+  const rounded = (finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite);
+  if (rounded.length) {
+    const counts = rounded.reduce((map, position) => map.set(position, (map.get(position) || 0) + 1), new Map());
+    return [...counts.entries()].sort((left, right) => right[1] - left[1] || rounded.indexOf(left[0]) - rounded.indexOf(right[0]))[0][0];
+  }
+  return finish.expected != null ? Math.round(Number(finish.expected)) : null;
 }
 function clearLiveState() {
   state.frames = []; state.beforeFrames = []; state.zones = []; state.assessment = null; state.beforeAssessment = null; state.beforeControls = null; state.connected = false; state.time = 0; state.frameIndex = 0;
@@ -320,7 +323,9 @@ function renderAssessment() {
   const finish = answers.finish_position || {}, projected = finishPosition(a); $('finish-expected').textContent = projected == null ? '—' : 'P' + projected;
   $('finish-note').textContent = a?.recommendation ? a.recommendation.action + ' · ' + a.recommendation.rationale : 'Waiting for the remote GPU assessment.';
   const histogram = Array.isArray(finish.histogram) ? finish.histogram.slice().sort((left, right) => Number(right.probability || 0) - Number(left.probability || 0)).slice(0, 5) : [];
-  const values = histogram.length ? histogram : [...new Set((finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite))].map((position, i, all) => ({ position, probability: (all.length - i) / all.length }));
+  const rounded = (finish.distribution || []).map(value => Math.round(Number(value))).filter(Number.isFinite);
+  const fallbackCounts = rounded.reduce((map, position) => map.set(position, (map.get(position) || 0) + 1), new Map());
+  const values = histogram.length ? histogram : [...fallbackCounts.entries()].sort((left, right) => right[1] - left[1] || left[0] - right[0]).map(([position, count]) => ({ position, probability: count / Math.max(1, rounded.length) }));
   const maxProbability = Math.max(0.0001, ...values.map(value => Number(value.probability || 0)));
   $('finish-bars').innerHTML = values.map(value => '<div class="finish-bar"><span>P' + Math.round(Number(value.position)) + '</span><i style="width:' + Math.max(16, Math.round(Number(value.probability || 0) / maxProbability * 100)) + '%"></i></div>').join('');
   // The first render happens before bootstrap returns. Guard the assessment

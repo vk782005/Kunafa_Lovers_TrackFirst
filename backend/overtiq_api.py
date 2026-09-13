@@ -30,7 +30,7 @@ DEVICE = torch.device("cuda:0") if torch.cuda.is_available() else None
 API_KEY = os.getenv("OVERTIQ_API_KEY", "")
 MODEL_PATH = os.getenv("OVERTIQ_MODEL", "/workspace/overtiq/reports/model/forecaster_2026_v1.pt")
 DECISION_MODEL_PATH = os.getenv("OVERTIQ_DECISION_MODEL", "/workspace/overtiq/pilot/decide_v4_coef.json")
-SERVICE_VERSION = "overtiq-gpu-0.4.1"
+SERVICE_VERSION = "overtiq-gpu-0.4.2"
 FRONTEND_DIR = Path(os.getenv("OVERTIQ_FRONTEND_DIR", "/workspace/overtiq/frontend"))
 PRECOMPUTED_DIR = Path(os.getenv("OVERTIQ_PRECOMPUTED_DIR", "/workspace/overtiq/precomputed"))
 
